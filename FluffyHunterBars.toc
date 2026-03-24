@@ -1,0 +1,44 @@
+## Interface: 20504
+## Title: |cAA27AE60Fluffy Hunter Bars|r
+
+## Notes: Tells the player whenever it is benefical to cast certain abilities in order to maximize single target dps
+
+## Author: Fluffydork of Nethergarde Keep (EU)
+## Version: 2.3.0
+
+## X-Category: Combat
+
+## X-Curse-Project-ID: 470317
+
+## SavedVariablesPerCharacter: FluffyDBPC
+
+# helper files
+preamble.debug.lua
+
+preamble.variables.lua
+preamble.auxiliary.lua
+
+# files related to the player power
+# tracks talents, weapons, agility attack power, hit, crit as a function of time
+player.stats.lua
+
+# tracks haste buffs and calculates haste as a function of time
+player.haste.lua
+
+# tracks armor pene buffs and calculates arp as a function of time
+player.arp.lua
+
+
+player.damage.lua
+
+abilities.lua
+recommendation_calculation.lua
+
+talent_handler.lua
+ammo_handler.lua
+equipment_handler.lua
+
+ui.elems.lua
+ui.core.lua
+core.lua
+
