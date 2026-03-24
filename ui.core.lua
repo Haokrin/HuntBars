@@ -159,6 +159,13 @@ end
 local function update_bars(ability, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height, t)
 	local bar_min_width = 1;
 
+    -- Apply the spark correction to autoshot bars so bars and sparks
+    -- stay visually synchronised during the fire transition.
+    local bar_correction = 0;
+    if ability == fluffy.ability_autoshot then
+        bar_correction = fluffy.spark_correction or 0;
+    end
+
     local bar_idx = 1;
     local Ws = ability["windows_s"];
     local We = ability["windows_e"];
@@ -167,8 +174,8 @@ local function update_bars(ability, left_shift_px, shift_y, fluffyBar_len, fluff
 
     for i=1,min(n, m) do
         if i > 1 or ((ability ~= fluffy.ability_autoshot or (not fluffy.is_casting_autoshot)) ) or not FluffyDBPC["hide_autoshotbar_when_casting"][1] then
-            local ts = max(0, Ws[i]- t);
-            local te = min(fluffyBar_len_seconds, max(0, We[i]- t));
+            local ts = max(0, Ws[i] + bar_correction - t);
+            local te = min(fluffyBar_len_seconds, max(0, We[i] + bar_correction - t));
             -- print(ability["name"] .. " -> " .. ts .. " - " .. te);
     
             if ts <= fluffyBar_len_seconds and te > 0 then
@@ -215,7 +222,7 @@ local function update_autoshot_spark(idx, t, fluffyBar_len, fluffyBar_len_second
             return;
         end
     
-        local auto_t = fluffy.autoshot_sparks[idx];
+        local auto_t = fluffy.autoshot_sparks[idx] + (fluffy.spark_correction or 0);
         local spark_bar = FluffyBars_autoshotsparks[idx];
         --local movement_bar = FluffyBars_autoshotmovements[idx];
     
@@ -556,7 +563,55 @@ local function gui_Update(self, elapsed)
     -- update_bars/update_autoshot_spark are pure pixel-math using the windows
     -- computed above, so they are very cheap and produce smooth motion.
     -- -----------------------------------------------------------------------
+
+    -- Decay the firing-transition correction each frame so sparks glide
+    -- smoothly from predicted positions to authoritative positions.
+    if fluffy.spark_correction ~= 0 then
+        fluffy.spark_correction = fluffy.spark_correction * 0.9;
+        if math.abs(fluffy.spark_correction) < 0.002 then
+            fluffy.spark_correction = 0;
+        end
+    end
+
     local n_sparks = table.getn(fluffy.autoshot_sparks);
+
+    -- When autoshot is stale (ready to fire but not being fired),
+    -- recompute spark positions from the current render-frame time
+    -- instead of using the cached logic-tick values.  The logic path
+    -- runs at ~20 fps and pins sparks to its own timestamp, which
+    -- causes a sawtooth jitter as the render path (every frame) uses
+    -- a different, advancing t.  Recomputing here keeps sparks at a
+    -- fixed relative position (cast-time offset from "now"), which
+    -- is both correct and visually stable.
+    local idle_autoshot = fluffy.ability_autoshot["next_start"] < t - 1.2 * fluffy.ability_autoshot["cast"](t);
+    if idle_autoshot and n_sparks > 0 then
+        wipe(fluffy.autoshot_sparks);
+        local first = max(fluffy.cast_finishes, max(t, fluffy.autoshot_delay))
+                    + fluffy.ability_autoshot["cast"](t);
+        table.insert(fluffy.autoshot_sparks, first);
+        while fluffy.autoshot_sparks[#fluffy.autoshot_sparks] < t + 3 * fluffyBar_len_s do
+            local prev_t = fluffy.autoshot_sparks[#fluffy.autoshot_sparks];
+            local advance = fluffy.ability_autoshot["cast"](prev_t)
+                          + fluffy.ability_autoshot["cdb"](prev_t);
+            if advance <= 0.05 then break end
+            table.insert(fluffy.autoshot_sparks, prev_t + advance);
+        end
+        n_sparks = #fluffy.autoshot_sparks;
+
+        -- Also recompute autoshot bar windows so they match the sparks.
+        wipe(fluffy.ability_autoshot["windows_s"]);
+        wipe(fluffy.ability_autoshot["windows_e"]);
+        for i = 1, n_sparks do
+            local s_t = fluffy.autoshot_sparks[i];
+            local s_cast = fluffy.ability_autoshot["cast"](s_t);
+            table.insert(fluffy.ability_autoshot["windows_s"], s_t - s_cast);
+            table.insert(fluffy.ability_autoshot["windows_e"], s_t);
+        end
+
+        -- No firing correction needed in idle mode.
+        fluffy.spark_correction = 0;
+    end
+
     for i=1,min(n_sparks, #FluffyBars_autoshotsparks) do
         update_autoshot_spark(i, t, fluffyBar_len, fluffyBar_len_s);
     end
