@@ -159,12 +159,11 @@ end
 local function update_bars(ability, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height, t)
 	local bar_min_width = 1;
 
-    -- Apply the spark correction to autoshot bars so bars and sparks
-    -- stay visually synchronised during the fire transition.
-    local bar_correction = 0;
-    if ability == fluffy.ability_autoshot then
-        bar_correction = fluffy.spark_correction or 0;
-    end
+    -- Apply the spark correction to ALL bars so sparks and every
+    -- recommendation bar stay visually synchronised during the fire
+    -- transition.  The correction is small and decays quickly, so
+    -- applying it uniformly keeps everything consistent.
+    local bar_correction = fluffy.spark_correction or 0;
 
     local bar_idx = 1;
     local Ws = ability["windows_s"];
@@ -509,9 +508,6 @@ local function gui_Hide(self, button)
     end
 end
 
--- last time the heavy ability-window recalculation was run
-local last_logic_update = 0;
-
 local function gui_Update(self, elapsed)
     
     if fluffy.is_player_hunter == false or FluffyDBPC["hidden"][1] == true or is_moving == true then
@@ -542,21 +538,20 @@ local function gui_Update(self, elapsed)
     local left_shift_px    = 3;
 
     -- -----------------------------------------------------------------------
-    -- HEAVY PATH: ability window recalculation, throttled to ~20 fps.
-    -- analyze_game_state is expensive (interval optimizer). We run it less
-    -- often and cache the resulting windows so the render path stays cheap.
-    -- logic_dirty is set by combat log handlers when autoshot state changes;
-    -- it bypasses the throttle so the very next frame picks up new timings.
+    -- LOGIC PATH: ability window recalculation — runs every frame.
+    -- Previously throttled to ~20 fps, but this caused a sawtooth jitter
+    -- because the render path (every frame) used a different t than the
+    -- logic path.  Window positions pinned to t_logic drifted between
+    -- ticks and then snapped back on the next tick.  Running every frame
+    -- ensures logic t always matches render t, eliminating all jitter.
+    -- The interval optimizer and API calls are lightweight enough for this.
     -- -----------------------------------------------------------------------
-    if fluffy.logic_dirty or (t - last_logic_update) >= 0.05 then
-        last_logic_update = t;
-        fluffy.logic_dirty = false;
-        update_spell_data();
+    fluffy.logic_dirty = false;
+    update_spell_data();
 
-        fluffy.bar_len_seconds = FluffyDBPC["window_length"];
-        fluffyBar_len_s = fluffy.bar_len_seconds;
-        analyze_game_state(fluffyBar_len_s, t);
-    end
+    fluffy.bar_len_seconds = FluffyDBPC["window_length"];
+    fluffyBar_len_s = fluffy.bar_len_seconds;
+    analyze_game_state(fluffyBar_len_s, t);
 
     -- -----------------------------------------------------------------------
     -- LIGHT PATH: bar and spark repositioning — runs every single frame.
@@ -564,53 +559,19 @@ local function gui_Update(self, elapsed)
     -- computed above, so they are very cheap and produce smooth motion.
     -- -----------------------------------------------------------------------
 
-    -- Decay the firing-transition correction each frame so sparks glide
-    -- smoothly from predicted positions to authoritative positions.
+    -- Decay the firing-transition correction using elapsed time so
+    -- the glide speed is consistent regardless of frame rate.
+    -- Half-life of ~60 ms means 99% decayed in ~400 ms.
     if fluffy.spark_correction ~= 0 then
-        fluffy.spark_correction = fluffy.spark_correction * 0.9;
-        if math.abs(fluffy.spark_correction) < 0.002 then
+        local dt = min(elapsed, 0.1);
+        local decay = 0.5 ^ (dt / 0.06);
+        fluffy.spark_correction = fluffy.spark_correction * decay;
+        if math.abs(fluffy.spark_correction) < 0.001 then
             fluffy.spark_correction = 0;
         end
     end
 
     local n_sparks = table.getn(fluffy.autoshot_sparks);
-
-    -- When autoshot is stale (ready to fire but not being fired),
-    -- recompute spark positions from the current render-frame time
-    -- instead of using the cached logic-tick values.  The logic path
-    -- runs at ~20 fps and pins sparks to its own timestamp, which
-    -- causes a sawtooth jitter as the render path (every frame) uses
-    -- a different, advancing t.  Recomputing here keeps sparks at a
-    -- fixed relative position (cast-time offset from "now"), which
-    -- is both correct and visually stable.
-    local idle_autoshot = fluffy.ability_autoshot["next_start"] < t - 1.2 * fluffy.ability_autoshot["cast"](t);
-    if idle_autoshot and n_sparks > 0 then
-        wipe(fluffy.autoshot_sparks);
-        local first = max(fluffy.cast_finishes, max(t, fluffy.autoshot_delay))
-                    + fluffy.ability_autoshot["cast"](t);
-        table.insert(fluffy.autoshot_sparks, first);
-        while fluffy.autoshot_sparks[#fluffy.autoshot_sparks] < t + 3 * fluffyBar_len_s do
-            local prev_t = fluffy.autoshot_sparks[#fluffy.autoshot_sparks];
-            local advance = fluffy.ability_autoshot["cast"](prev_t)
-                          + fluffy.ability_autoshot["cdb"](prev_t);
-            if advance <= 0.05 then break end
-            table.insert(fluffy.autoshot_sparks, prev_t + advance);
-        end
-        n_sparks = #fluffy.autoshot_sparks;
-
-        -- Also recompute autoshot bar windows so they match the sparks.
-        wipe(fluffy.ability_autoshot["windows_s"]);
-        wipe(fluffy.ability_autoshot["windows_e"]);
-        for i = 1, n_sparks do
-            local s_t = fluffy.autoshot_sparks[i];
-            local s_cast = fluffy.ability_autoshot["cast"](s_t);
-            table.insert(fluffy.ability_autoshot["windows_s"], s_t - s_cast);
-            table.insert(fluffy.ability_autoshot["windows_e"], s_t);
-        end
-
-        -- No firing correction needed in idle mode.
-        fluffy.spark_correction = 0;
-    end
 
     for i=1,min(n_sparks, #FluffyBars_autoshotsparks) do
         update_autoshot_spark(i, t, fluffyBar_len, fluffyBar_len_s);
