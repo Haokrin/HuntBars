@@ -134,6 +134,15 @@ fluffy.logic_dirty = false;
 -- the visual jump when transitioning from one auto shot cycle to the next.
 fluffy.spark_correction = 0;
 
+-- Tracks the last time an event caused a state change, so the OOC idle
+-- freeze can continue updating long enough for cooldowns to expire.
+fluffy.last_dirty_time = 0;
+
+-- Previous frame's first two spark positions, used to detect visual
+-- jumps (from haste changes or fire events) and smooth them.
+fluffy.prev_spark_1 = 0;
+fluffy.prev_spark_2 = 0;
+
 fluffy.spell_color_steady = "FFFC9803"; -- 252, 152, 3
 fluffy.spell_color_multi = "FF0386FC"; -- 3, 134, 254
 fluffy.spell_color_arcane = "FFaf7ac5"; -- 175, 122, 197 

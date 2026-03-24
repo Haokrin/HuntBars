@@ -935,10 +935,6 @@ local function parse_combat_event(log_message)
 			fluffy.is_casting_autoshot = false;
 			fluffy.is_casting = false;
 
-			-- Capture old prediction before overwriting, so we can smooth
-			-- the visual transition instead of snapping all sparks at once.
-			local old_next_fired = fluffy.ability_autoshot["next_fired"];
-
 			local curr_haste = get_haste_mod_ranged(current_auto_finish);
 			local curr_speed = fluffy.ranged_base_speed * curr_haste;
 
@@ -953,16 +949,14 @@ local function parse_combat_event(log_message)
 			fluffy.ability_autoshot["next_fired"] = next_auto_finish;
 			fluffy.logic_dirty = true;
 
-			-- Compute prediction error for smooth spark transition.
-			-- old_next_fired is where the spark WAS predicted to land;
-			-- current_auto_finish is where it ACTUALLY landed.  The error
-			-- is applied as an offset to spark rendering and decayed over
-			-- several frames so the bars glide instead of jumping.
-			if old_next_fired > 0 and old_next_fired > t - 5 then
-				fluffy.spark_correction = old_next_fired - current_auto_finish;
-			else
-				fluffy.spark_correction = 0;
-			end
+			-- Update rotation_ews to match the speed we just used so the
+			-- haste compensation in analyze_game_state does NOT re-adjust
+			-- next_start a second time.  Without this, when Quick Shots
+			-- procs and UNIT_AURA fires before COMBAT_LOG, parse_combat_event
+			-- computes next_start with the new haste, but rotation_ews still
+			-- holds the old value, causing a double-adjustment overshoot.
+			fluffy.rotation_ews = fluffy.ability_autoshot["cdb"](current_auto_finish)
+			                    + fluffy.ability_autoshot["cast"](current_auto_finish);
 			
 			print_debug("WPN SPEED: " .. string.format("%5.3f", fluffy.ranged_base_speed) .. " -> " .. string.format("%5.3f", curr_speed));
 			
