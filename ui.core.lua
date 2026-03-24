@@ -527,8 +527,11 @@ local function gui_Update(self, elapsed)
     -- A dirty flag (set by combat events) breaks out immediately so the
     -- first auto shot of a new pull is picked up without delay.
     -- -----------------------------------------------------------------------
+    if fluffy.logic_dirty then
+        fluffy.last_dirty_time = t;
+    end
     local autoshot_stale = fluffy.ability_autoshot["next_start"] < t - 2;
-    if autoshot_stale and not UnitAffectingCombat("player") and not fluffy.logic_dirty then
+    if autoshot_stale and not UnitAffectingCombat("player") and not fluffy.logic_dirty and (t - fluffy.last_dirty_time) > 12 then
         return;
     end
 
@@ -552,6 +555,51 @@ local function gui_Update(self, elapsed)
     fluffy.bar_len_seconds = FluffyDBPC["window_length"];
     fluffyBar_len_s = fluffy.bar_len_seconds;
     analyze_game_state(fluffyBar_len_s, t);
+
+    -- -----------------------------------------------------------------------
+    -- GENERAL SPARK JUMP DETECTION
+    -- Compare the first two spark positions from this frame against the
+    -- previous frame.  When a haste change (Quick Shots, Rapid Fire) or
+    -- fire event shifts sparks, we detect the shift and fold it into
+    -- spark_correction so the visual transition is a smooth glide.
+    -- We match the new first spark against both previous positions to handle
+    -- fire transitions (prev spark 1 consumed, prev spark 2 becomes new spark 1).
+    -- -----------------------------------------------------------------------
+    local n_sparks_now = table.getn(fluffy.autoshot_sparks);
+    if n_sparks_now >= 1 and fluffy.prev_spark_1 > 0 then
+        local new_s1 = fluffy.autoshot_sparks[1];
+        local half_ews = (fluffy.rotation_ews or 1) * 0.5;
+
+        -- Candidate shifts: compare new first spark to old first and old second.
+        local shift_a = fluffy.prev_spark_1 - new_s1;
+        local shift_b = (fluffy.prev_spark_2 > 0) and (fluffy.prev_spark_2 - new_s1) or 999;
+
+        -- Pick the candidate closest to zero (smallest visual jump).
+        local shift;
+        if math.abs(shift_a) <= math.abs(shift_b) then
+            shift = shift_a;
+        else
+            shift = shift_b;
+        end
+
+        -- Only correct if the jump is noticeable (>5 ms) but less than half
+        -- a weapon speed (larger jumps are intentional resets like FD).
+        if math.abs(shift) > 0.005 and math.abs(shift) < half_ews then
+            fluffy.spark_correction = fluffy.spark_correction + shift;
+        end
+    end
+
+    -- Store current spark positions for next frame comparison.
+    if n_sparks_now >= 1 then
+        fluffy.prev_spark_1 = fluffy.autoshot_sparks[1];
+    else
+        fluffy.prev_spark_1 = 0;
+    end
+    if n_sparks_now >= 2 then
+        fluffy.prev_spark_2 = fluffy.autoshot_sparks[2];
+    else
+        fluffy.prev_spark_2 = 0;
+    end
 
     -- -----------------------------------------------------------------------
     -- LIGHT PATH: bar and spark repositioning — runs every single frame.
