@@ -463,8 +463,20 @@ function analyze_game_state(window_len, t)
 
     -- Derive current effective weapon speed and rotation mode label.
     -- eWS = full attack period = swing cooldown + cast time = base_speed * haste.
+    -- Use UnitRangedDamage() as the authoritative speed source instead of
+    -- computing from the buff table.  The game engine already knows the exact
+    -- haste from ALL effects; our manual buff tracking can drift and cause
+    -- the spark prediction to disagree with the actual fire time, which is
+    -- the root cause of visual jumps.  Fall back to buff table computation
+    -- only if the API returns an invalid value.
     if fluffy.ranged_base_speed > 0 then
-        local new_ews = fluffy.ability_autoshot["cdb"](t) + fluffy.ability_autoshot["cast"](t);
+        local api_speed = UnitRangedDamage("player");
+        local new_ews;
+        if api_speed and api_speed > 0.1 then
+            new_ews = api_speed;
+        else
+            new_ews = fluffy.ability_autoshot["cdb"](t) + fluffy.ability_autoshot["cast"](t);
+        end
 
         -- When haste changes mid-swing (buff gained/lost), the old predicted
         -- next_start was based on the old period.  Scale the remaining time

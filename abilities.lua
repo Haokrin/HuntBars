@@ -935,10 +935,21 @@ local function parse_combat_event(log_message)
 			fluffy.is_casting_autoshot = false;
 			fluffy.is_casting = false;
 
-			local curr_haste = get_haste_mod_ranged(current_auto_finish);
-			local curr_speed = fluffy.ranged_base_speed * curr_haste;
+			-- Use UnitRangedDamage() as the authoritative speed source.
+			-- This returns the game engine's actual current attack period
+			-- with ALL haste effects already applied, eliminating drift
+			-- from manual buff table computation that causes visual jumps.
+			local api_speed = UnitRangedDamage("player");
+			local curr_speed;
+			if api_speed and api_speed > 0.1 then
+				curr_speed = api_speed;
+			else
+				-- Fallback to buff table computation if API returns invalid
+				curr_speed = fluffy.ranged_base_speed * get_haste_mod_ranged(current_auto_finish);
+			end
 
-			current_auto_start =  current_auto_finish -  0.5 * curr_haste;
+			local curr_cast = curr_speed * 0.5 / fluffy.ranged_base_speed;
+			current_auto_start = current_auto_finish - curr_cast;
 
 			next_auto_start =  current_auto_start + curr_speed;
 			next_auto_finish = current_auto_finish + curr_speed;
@@ -949,15 +960,13 @@ local function parse_combat_event(log_message)
 			fluffy.ability_autoshot["next_fired"] = next_auto_finish;
 			fluffy.logic_dirty = true;
 
-			-- Update rotation_ews to match the speed we just used so the
+			-- Update rotation_ews to the authoritative API speed so the
 			-- haste compensation in analyze_game_state does NOT re-adjust
-			-- next_start a second time.  Without this, when Quick Shots
-			-- procs and UNIT_AURA fires before COMBAT_LOG, parse_combat_event
-			-- computes next_start with the new haste, but rotation_ews still
-			-- holds the old value, causing a double-adjustment overshoot.
-			fluffy.rotation_ews = fluffy.ability_autoshot["cdb"](current_auto_finish)
-			                    + fluffy.ability_autoshot["cast"](current_auto_finish);
-			
+			-- next_start a second time.  Using the same source (API speed)
+			-- in both places prevents the double-adjustment overshoot that
+			-- occurred when buff table and API disagreed.
+			fluffy.rotation_ews = curr_speed;
+
 			print_debug("WPN SPEED: " .. string.format("%5.3f", fluffy.ranged_base_speed) .. " -> " .. string.format("%5.3f", curr_speed));
 			
 		elseif event == "SPELL_CAST_SUCCESS" then
