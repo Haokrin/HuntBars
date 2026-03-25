@@ -4,7 +4,7 @@
 ## Notes: Tells the player whenever it is benefical to cast certain abilities in order to maximize single target dps
 
 ## Author: Fluffydork of Nethergarde Keep (EU)
-## Version: 2.3.0
+## Version: 2.4.0
 
 ## X-Category: Combat
 
