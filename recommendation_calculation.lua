@@ -70,11 +70,15 @@ local function optimize_towards_autoshot()
                     -- Multi/Arcane also have a cast time. Pulling the window
                     -- end back by cast(t) ensures we never suggest firing them
                     -- when the cast itself would overlap the incoming autoshot.
-                    -- Without this, the bar shows multi right up to auto_ts
-                    -- which clips the auto when acted on.
+                    -- We also subtract the measured network latency so that
+                    -- by the time the server receives and starts the cast, the
+                    -- full cast duration still finishes before the auto shot.
+                    -- Without this, the bar shows multi-shot as safe to cast
+                    -- when it would actually clip the auto on higher-latency
+                    -- connections.
                     local cast_time = A["cast"](auto_ts);
                     if cast_time > 0 then
-                        f = auto_ts - cast_time;
+                        f = auto_ts - cast_time - fluffy.latency;
                     end
                 end
 
