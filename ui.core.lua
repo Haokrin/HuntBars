@@ -611,14 +611,16 @@ local function gui_Update(self, elapsed)
 
     -- Decay the firing-transition correction using elapsed time so
     -- the glide speed is consistent regardless of frame rate.
-    -- Half-life of ~150 ms means 99% decayed in ~1 s — slow enough
-    -- to look like a smooth glide, fast enough to settle before the
-    -- next autoshot fires.
+    -- Half-life of ~250 ms means the correction is:
+    --   50% after 250 ms, 25% after 500 ms, ~6% after 1 s,
+    --   ~1% after 1.5 s.  This is slow enough for the fire-transition
+    -- slide (which seeds a large correction) to look smooth, while
+    -- still settling well before the next autoshot fires (~2 s cycle).
     if fluffy.spark_correction ~= 0 then
         local dt = min(elapsed, 0.1);
-        local decay = 0.5 ^ (dt / 0.15);
+        local decay = 0.5 ^ (dt / 0.25);
         fluffy.spark_correction = fluffy.spark_correction * decay;
-        if math.abs(fluffy.spark_correction) < 0.001 then
+        if math.abs(fluffy.spark_correction) < 0.005 then
             fluffy.spark_correction = 0;
         end
     end
