@@ -478,16 +478,16 @@ function analyze_game_state(window_len, t)
             new_ews = fluffy.ability_autoshot["cdb"](t) + fluffy.ability_autoshot["cast"](t);
         end
 
-        -- When haste changes mid-swing (buff gained/lost), the old predicted
-        -- next_start was based on the old period.  Scale the remaining time
-        -- proportionally so sparks shift smoothly instead of jumping when the
-        -- actual auto fires at a different time than predicted.
-        if fluffy.rotation_ews > 0.1 and math.abs(new_ews - fluffy.rotation_ews) > 0.01 then
-            local remaining = fluffy.ability_autoshot["next_start"] - t;
-            if remaining > 0 then
-                fluffy.ability_autoshot["next_start"] = t + remaining * (new_ews / fluffy.rotation_ews);
-            end
-        end
+        -- Do NOT rescale next_start mid-swing when haste changes.
+        -- The old code adjusted next_start proportionally every frame,
+        -- which caused visible spark jumps the instant a haste buff was
+        -- gained or lost.  Instead, let next_start stay where the last
+        -- SPELL_CAST_SUCCESS set it.  When the auto fires at a slightly
+        -- different time (the game engine does adjust mid-swing), the
+        -- SPELL_CAST_SUCCESS handler will set the authoritative next
+        -- cycle, and spark_correction will smooth the small transition.
+        -- This matches WeaponSwingTimer's approach: speed is only
+        -- applied on fire events, never mid-swing.
 
         fluffy.rotation_ews  = new_ews;
         fluffy.rotation_mode = derive_rotation_mode(new_ews);
