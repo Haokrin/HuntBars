@@ -658,6 +658,42 @@ local function gui_Update(self, elapsed)
 
         if fluffy.ews_label and fluffy.rotation_ews > 0 then
             fluffy.ews_label:SetText(string.format("%.2fs", fluffy.rotation_ews));
+
+            -- Colour the eWS label to reflect active haste buffs.
+            -- Cyan for Quick Shots, green for Rapid Fire, orange for both,
+            -- default grey when neither is active.
+            local qs_active = fluffy.haste_buffs_table[fluffy.haste_id_quick_shots][1] >= t;
+            local rf_active = fluffy.haste_buffs_table[fluffy.haste_id_rapid_fire][1] >= t;
+            if qs_active and rf_active then
+                fluffy.ews_label:SetTextColor(1, 0.65, 0, 1);    -- orange
+            elseif rf_active then
+                fluffy.ews_label:SetTextColor(0.2, 1, 0.2, 1);   -- green
+            elseif qs_active then
+                fluffy.ews_label:SetTextColor(0, 0.9, 1, 1);     -- cyan
+            else
+                fluffy.ews_label:SetTextColor(0.7, 0.7, 0.7, 1); -- grey (default)
+            end
+        end
+
+        -- Haste buff indicator: show active ranged haste buff names so
+        -- the player gets immediate visual feedback when Quick Shots or
+        -- Rapid Fire proc.  This addresses the complaint that the UI
+        -- shows no change when Quick Shots fires.
+        if fluffy.haste_indicator_label then
+            local parts = {};
+            if fluffy.haste_buffs_table[fluffy.haste_id_quick_shots][1] >= t then
+                table.insert(parts, "QS");
+            end
+            if fluffy.haste_buffs_table[fluffy.haste_id_rapid_fire][1] >= t then
+                table.insert(parts, "RF");
+            end
+            if #parts > 0 then
+                fluffy.haste_indicator_label:SetText(table.concat(parts, "+"));
+                fluffy.haste_indicator_label:Show();
+            else
+                fluffy.haste_indicator_label:SetText("");
+                fluffy.haste_indicator_label:Hide();
+            end
         end
 
         if fluffy.latency_label then

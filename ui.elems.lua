@@ -52,6 +52,14 @@ function create_main_bar()
     fluffy.latency_label:SetPoint("BOTTOMRIGHT", FluffyBar, "TOPRIGHT", -2, 2);
     fluffy.latency_label:SetText("? ms");
     fluffy.latency_label:SetTextColor(0.6, 0.9, 0.6, 1);  -- light green
+
+    -- Haste buff indicator — shows between rotation label and eWS label.
+    -- Displays "QS" (Quick Shots) or "RF" (Rapid Fire) when those buffs
+    -- are active so the player gets clear visual feedback on haste procs.
+    fluffy.haste_indicator_label = FluffyBar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall");
+    fluffy.haste_indicator_label:SetPoint("BOTTOMLEFT", FluffyBar, "TOPLEFT", 70, 2);
+    fluffy.haste_indicator_label:SetText("");
+    fluffy.haste_indicator_label:SetTextColor(0, 1, 1, 1);  -- cyan
 end
 
 function create_icon_anchor()
