@@ -528,6 +528,7 @@ fluffy_frame_buffs:SetScript("OnEvent",
 				fluffy.feign_death_active = 0;
 			end
 		end
+		fluffy.logic_dirty = true;
     end
 );
 
