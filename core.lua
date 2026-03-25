@@ -536,12 +536,23 @@ local fluffy_frame_loading = CreateFrame("Frame");
 
 fluffy_frame_loading:RegisterEvent("PLAYER_LEAVING_WORLD");
 fluffy_frame_loading:RegisterEvent("PLAYER_ENTERING_WORLD");
+fluffy_frame_loading:RegisterEvent("CHARACTER_POINTS_CHANGED");
 fluffy_frame_loading:SetScript("OnEvent",
     function(self, event)
 		if event == "PLAYER_LEAVING_WORLD" then
 			fluffy.time_loaded = GetTime() + 5;
 		elseif event == "PLAYER_ENTERING_WORLD" then
 			fluffy.time_loaded = GetTime() + 5;
+			-- Re-read talents here because talent data is not yet available
+			-- during ADDON_LOADED (GetTalentInfo returns nil at that point).
+			if fluffy.is_player_hunter then
+				update_talent_stats();
+			end
+		elseif event == "CHARACTER_POINTS_CHANGED" then
+			-- Talent respec or level-up: refresh talent-derived values.
+			if fluffy.is_player_hunter then
+				update_talent_stats();
+			end
 		end
     end
 );
