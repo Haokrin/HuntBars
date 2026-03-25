@@ -582,9 +582,11 @@ local function gui_Update(self, elapsed)
             shift = shift_b;
         end
 
-        -- Only correct if the jump is noticeable (>5 ms) but less than half
+        -- Only correct if the jump is noticeable (>50 ms) but less than half
         -- a weapon speed (larger jumps are intentional resets like FD).
-        if math.abs(shift) > 0.005 and math.abs(shift) < half_ews then
+        -- The 50 ms floor avoids false positives from per-frame time drift
+        -- when autoshot_shift is pinned to the moving 't' value (stale auto).
+        if math.abs(shift) > 0.05 and math.abs(shift) < half_ews then
             fluffy.spark_correction = fluffy.spark_correction + shift;
         end
     end
@@ -609,10 +611,12 @@ local function gui_Update(self, elapsed)
 
     -- Decay the firing-transition correction using elapsed time so
     -- the glide speed is consistent regardless of frame rate.
-    -- Half-life of ~60 ms means 99% decayed in ~400 ms.
+    -- Half-life of ~150 ms means 99% decayed in ~1 s — slow enough
+    -- to look like a smooth glide, fast enough to settle before the
+    -- next autoshot fires.
     if fluffy.spark_correction ~= 0 then
         local dt = min(elapsed, 0.1);
-        local decay = 0.5 ^ (dt / 0.06);
+        local decay = 0.5 ^ (dt / 0.15);
         fluffy.spark_correction = fluffy.spark_correction * decay;
         if math.abs(fluffy.spark_correction) < 0.001 then
             fluffy.spark_correction = 0;
