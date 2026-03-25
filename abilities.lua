@@ -960,6 +960,17 @@ local function parse_combat_event(log_message)
 			fluffy.ability_autoshot["next_fired"] = next_auto_finish;
 			fluffy.logic_dirty = true;
 
+			-- Seed spark_correction with a negative offset so the visual
+			-- transition is a smooth glide instead of an instant jump.
+			-- When auto fires, the ability bars jump from "near left edge"
+			-- (positioned around the just-fired auto) to further right
+			-- (positioned around the next auto cycle).  Without correction
+			-- this creates a sudden empty gap at the left of the bar.
+			-- By offsetting all elements backward by the cast time, bars
+			-- start at their pre-fire positions and smoothly slide right
+			-- as the correction decays (~150 ms half-life).
+			fluffy.spark_correction = -curr_cast;
+
 			-- Update rotation_ews to the authoritative API speed so the
 			-- haste compensation in analyze_game_state does NOT re-adjust
 			-- next_start a second time.  Using the same source (API speed)
