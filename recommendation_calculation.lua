@@ -529,10 +529,17 @@ function analyze_game_state(window_len, t)
     if autoshot_shift < t - 1.2*fluffy.ability_autoshot["cast"](t) then
         autoshot_shift = t;
     end
-    autoshot_shift = max(fluffy.cast_finishes, max(autoshot_shift, fluffy.autoshot_delay));
-    -- if (IsPlayerMoving() or IsFalling()) then
-    --     last_time_moved = t;
-    -- end
+    -- Only apply cast_finishes constraint for NON-autoshot casts (e.g. Steady,
+    -- Multi).  During the autoshot cast itself, cast_finishes already includes
+    -- endTime + latency (= next_start + cast_time + latency).  Using that to
+    -- push autoshot_shift and then adding cast() again would double-count the
+    -- cast time, causing the spark to jump forward by ~cast_time + latency
+    -- every frame during the autoshot cast and snap back when it fires.
+    if not fluffy.is_casting_autoshot then
+        autoshot_shift = max(fluffy.cast_finishes, max(autoshot_shift, fluffy.autoshot_delay));
+    else
+        autoshot_shift = max(autoshot_shift, fluffy.autoshot_delay);
+    end
     autoshot_shift = autoshot_shift + fluffy.ability_autoshot["cast"](autoshot_shift);
     -- autoshot_shift = max(autoshot_shift, last_time_moved + fluffy.movement_spark_interval);
     table.insert(fluffy.autoshot_sparks, autoshot_shift);
