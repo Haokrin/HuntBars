@@ -918,13 +918,25 @@ local function parse_combat_event(log_message)
 			fluffy.is_casting = true;
 			fluffy.logic_dirty = true;
 
-			-- Do NOT snap next_start / fired / next_fired here.
-			-- The predicted values from the previous SPELL_CAST_SUCCESS are close
-			-- enough, and snapping them to GetTime() causes a visible jump in
-			-- spark positions (the prediction error gets corrected all at once).
-			-- UnitCastingInfo() in analyze_game_state provides the accurate cast
-			-- end time for blocking recommendations, and SPELL_CAST_SUCCESS will
-			-- set authoritative values for the NEXT auto shot cycle.
+			-- On the FIRST autoshot (fired == 0), bootstrap the cycle so the
+			-- bar starts moving immediately instead of waiting for SPELL_CAST_SUCCESS.
+			-- After the first fire, we do NOT snap values here — the predictions
+			-- from the previous SPELL_CAST_SUCCESS are close enough, and snapping
+			-- would cause a visible jump in spark positions.
+			if fluffy.ability_autoshot["fired"] == 0 then
+				local api_speed = UnitRangedDamage("player");
+				local init_speed;
+				if api_speed and api_speed > 0.1 then
+					init_speed = api_speed;
+				else
+					init_speed = fluffy.ranged_base_speed * get_haste_mod_ranged(current_auto_start);
+				end
+				local init_cast = init_speed * 0.5 / fluffy.ranged_base_speed;
+				fluffy.ability_autoshot["fired"] = current_auto_start;
+				fluffy.ability_autoshot["next_start"] = current_auto_start;
+				fluffy.ability_autoshot["next_fired"] = current_auto_start + init_cast;
+				fluffy.rotation_ews = init_speed;
+			end
 		elseif event == "SPELL_CAST_START" then
 			
 			fluffy.is_casting = true;

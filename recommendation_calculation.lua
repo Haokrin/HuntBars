@@ -512,9 +512,16 @@ function analyze_game_state(window_len, t)
     if not fluffy.is_casting_autoshot then
         fluffy.cast_finishes = t;
     else
+        -- During autoshot cast, set cast_finishes to next_start (cooldown end).
+        -- Do NOT push it forward with UnitCastingInfo's endTime — the autoshot
+        -- cast is already blocked by the autoshot intervals in the optimizer.
+        -- Pushing cast_finishes with endTime + latency caused ability windows
+        -- to jump left on fire (they started at endTime + latency during cast,
+        -- then snapped to t after fire, creating a visible gap/shift).
         fluffy.cast_finishes = fluffy.ability_autoshot["next_start"];
     end
-    if spell then
+    if spell and not fluffy.is_casting_autoshot then
+        -- Only push cast_finishes for non-autoshot casts (Steady, Multi, etc.).
         -- Add measured network latency so the addon waits for server-side
         -- registration before recommending the next ability.  Without this,
         -- on connections with >~80 ms ping the bar lights up slightly too
