@@ -300,7 +300,18 @@ local function analyze_windows_of_opportunities_experimental(abilities, window_l
         table.insert(intervals_autoshot_ends, auto_fired_time);
         table.insert(intervals_autoshot_starts, auto_fired_time - auto_cast);
 
-        table.insert(fluffy.ability_autoshot["windows_s"], auto_fired_time - auto_cast);
+        -- For the first (next) autoshot, extend the visual bar back to the
+        -- last fire time so the bar shows continuous progress across the
+        -- full cooldown+cast cycle.  Without this, only the cast portion
+        -- (~0.34s) is shown and there is a visible gap during cooldown.
+        local vis_start;
+        local fired = fluffy.ability_autoshot["fired"];
+        if k == 1 and fired and fired > 0 then
+            vis_start = fired;
+        else
+            vis_start = auto_fired_time - auto_cast;
+        end
+        table.insert(fluffy.ability_autoshot["windows_s"], vis_start);
         table.insert(fluffy.ability_autoshot["windows_e"], auto_fired_time);
     end
 
@@ -525,8 +536,21 @@ function analyze_game_state(window_len, t)
 		fluffy.ability_meleestrike["next_start"] = t + mainSpeed;
     end
 
+    -- Use API-derived effective weapon speed for autoshot spark computation
+    -- so spark positions are perfectly consistent with the fire handler.
+    -- The buff table cast()/cdb() can drift slightly from UnitRangedDamage(),
+    -- causing a small shift every time the auto fires.
+    local api_ews = fluffy.rotation_ews;
+    local api_cast_time;
+    if api_ews > 0.1 and fluffy.ranged_base_speed > 0 then
+        api_cast_time = api_ews * 0.5 / fluffy.ranged_base_speed;
+    else
+        api_cast_time = fluffy.ability_autoshot["cast"](t);
+        api_ews = api_cast_time + fluffy.ability_autoshot["cdb"](t);
+    end
+
     local autoshot_shift = fluffy.ability_autoshot["next_start"];
-    if autoshot_shift < t - 1.2*fluffy.ability_autoshot["cast"](t) then
+    if autoshot_shift < t - 1.2 * api_cast_time then
         autoshot_shift = t;
     end
     -- Only apply cast_finishes constraint for NON-autoshot casts (e.g. Steady,
@@ -540,17 +564,15 @@ function analyze_game_state(window_len, t)
     else
         autoshot_shift = max(autoshot_shift, fluffy.autoshot_delay);
     end
-    autoshot_shift = autoshot_shift + fluffy.ability_autoshot["cast"](autoshot_shift);
-    -- autoshot_shift = max(autoshot_shift, last_time_moved + fluffy.movement_spark_interval);
+    autoshot_shift = autoshot_shift + api_cast_time;
     table.insert(fluffy.autoshot_sparks, autoshot_shift);
 
     while autoshot_shift < t + 3*window_len do
-        local advance = fluffy.ability_autoshot["cast"](autoshot_shift) + fluffy.ability_autoshot["cdb"](autoshot_shift);
         -- Safety guard: if advance is zero or negative (can happen when
         -- ranged_base_speed is 0 or not yet loaded) the loop would hang forever.
         -- Break out and let the next frame try again once stats are loaded.
-        if advance <= 0.05 then break end
-        autoshot_shift = autoshot_shift + advance;
+        if api_ews <= 0.05 then break end
+        autoshot_shift = autoshot_shift + api_ews;
         table.insert(fluffy.autoshot_sparks, autoshot_shift);
     end
 
