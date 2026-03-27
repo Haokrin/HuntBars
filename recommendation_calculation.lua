@@ -300,18 +300,12 @@ local function analyze_windows_of_opportunities_experimental(abilities, window_l
         table.insert(intervals_autoshot_ends, auto_fired_time);
         table.insert(intervals_autoshot_starts, auto_fired_time - auto_cast);
 
-        -- For the first (next) autoshot, extend the visual bar back to the
-        -- last fire time so the bar shows continuous progress across the
-        -- full cooldown+cast cycle.  Without this, only the cast portion
-        -- (~0.34s) is shown and there is a visible gap during cooldown.
-        local vis_start;
-        local fired = fluffy.ability_autoshot["fired"];
-        if k == 1 and fired and fired > 0 then
-            vis_start = fired;
-        else
-            vis_start = auto_fired_time - auto_cast;
-        end
-        table.insert(fluffy.ability_autoshot["windows_s"], vis_start);
+        -- Show only the cast portion of each autoshot window.  Extending
+        -- vis_start back to "fired" caused the bar to fill the entire
+        -- display whenever cast_finishes pushed the next spark far into
+        -- the future (e.g. after Steady/Multi-Shot): ts was clamped to 0
+        -- (fired is always in the past) while te hit the full bar length.
+        table.insert(fluffy.ability_autoshot["windows_s"], auto_fired_time - auto_cast);
         table.insert(fluffy.ability_autoshot["windows_e"], auto_fired_time);
     end
 
