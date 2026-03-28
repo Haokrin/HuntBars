@@ -156,17 +156,15 @@ function update_size()
 	update_visibility();
 end
 
--- Finds the next ability to cast by finding the earliest window start time.
--- Shows upcoming abilities even if their window hasn't appeared on screen yet.
--- Uses the bar length as the look-ahead window to stay in sync with generated windows.
+-- Finds the next ability to cast by finding the earliest ACTIVE or UPCOMING
+-- window across all abilities.  Scans all windows per ability (not just the
+-- first) so that windows which have already ended are skipped.
 local function find_next_ability_to_cast(t, look_ahead_seconds)
 	local next_ability = nil;
 	local earliest_time = math.huge;
 
-	-- Default look-ahead matches the visible bar length
 	look_ahead_seconds = look_ahead_seconds or 3.4;
 
-	-- Check all active abilities for the earliest window start
 	local abilities = {
 		fluffy.ability_steadyshot,
 		fluffy.ability_multishot,
@@ -176,12 +174,18 @@ local function find_next_ability_to_cast(t, look_ahead_seconds)
 	};
 
 	for _, ability in pairs(abilities) do
-		if #ability["windows_s"] > 0 then
-			local window_start = ability["windows_s"][1];
-			-- Show ability if its window starts before the look-ahead limit
-			if window_start < t + look_ahead_seconds and window_start < earliest_time then
-				earliest_time = window_start;
-				next_ability = ability;
+		local Ws = ability["windows_s"];
+		local We = ability["windows_e"];
+		for i = 1, #Ws do
+			local ws = Ws[i];
+			local we = We[i];
+			-- Skip windows that have already ended
+			if we > t and ws < t + look_ahead_seconds then
+				if ws < earliest_time then
+					earliest_time = ws;
+					next_ability = ability;
+				end
+				break;  -- first valid window for this ability, move on
 			end
 		end
 	end
@@ -494,6 +498,7 @@ local function draw_intervals(bar_len_secs_unused, t, left_shift_px, shift_y, fl
     -- Determine which ability should be shown next in baked rotation mode
     -- Pass bar length so look-ahead matches what windows have been generated
     local next_ability = find_next_ability_to_cast(t, fluffyBar_len_s);
+    fluffy.baked_next_ability_name = next_ability and next_ability["name"] or nil;
 
     update_bars(fluffy.ability_autoshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
     update_bars(fluffy.ability_aimedshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
@@ -696,7 +701,12 @@ local function gui_Update(self, elapsed)
         if fluffy.rotation_label then
             -- Show/hide rotation mode label based on setting
             if FluffyDBPC["show_rotation_mode"][1] then
-                fluffy.rotation_label:SetText(fluffy.rotation_mode);
+                -- When baked rotation is active, also show the next ability name
+                local label_text = fluffy.rotation_mode or "...";
+                if FluffyDBPC["baked_rotation"][1] and fluffy.baked_next_ability_name then
+                    label_text = label_text .. " > " .. fluffy.baked_next_ability_name;
+                end
+                fluffy.rotation_label:SetText(label_text);
                 fluffy.rotation_label:Show();
                 local mode = fluffy.rotation_mode;
                 if mode == "French" or mode == "LongFrench" then
