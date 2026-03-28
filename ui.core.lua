@@ -156,8 +156,50 @@ function update_size()
 	update_visibility();
 end
 
-local function update_bars(ability, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height, t)
+-- Finds the next ability to cast by finding the earliest window start time.
+-- Used in "baked rotation" mode to show only the next recommended ability.
+local function find_next_ability_to_cast(t)
+	local next_ability = nil;
+	local earliest_time = math.huge;
+
+	-- Check all active abilities for the earliest window start
+	local abilities = {
+		fluffy.ability_steadyshot,
+		fluffy.ability_multishot,
+		fluffy.ability_arcaneshot,
+		fluffy.ability_raptorstrike,
+		fluffy.ability_meleestrike
+	};
+
+	for _, ability in pairs(abilities) do
+		if #ability["windows_s"] > 0 then
+			local window_start = ability["windows_s"][1];
+			if window_start >= t and window_start < earliest_time then
+				earliest_time = window_start;
+				next_ability = ability;
+			end
+		end
+	end
+
+	return next_ability;
+end
+
+local function update_bars(ability, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height, t, next_ability_to_show)
 	local bar_min_width = 1;
+
+    -- In baked rotation mode, only show bars for:
+    -- - Autoshot (always shown)
+    -- - The next ability to cast (determined by earliest window start)
+    local baked_rotation_enabled = FluffyDBPC["baked_rotation"][1];
+    if baked_rotation_enabled and ability ~= fluffy.ability_autoshot and ability ~= fluffy.ability_aimedshot then
+        if ability ~= next_ability_to_show then
+            -- Hide all bars for this ability and return
+            for j = 1, #ability["bars"] do
+                ability["bars"][j]:Hide();
+            end
+            return;
+        end
+    end
 
     -- Apply the spark correction to ALL bars so sparks and every
     -- recommendation bar stay visually synchronised during the fire
@@ -441,15 +483,18 @@ local function draw_intervals(bar_len_secs_unused, t, left_shift_px, shift_y, fl
     if FluffyDBPC["consider_melee"][1] ~= false then
         height_m = -0.5*(0.5 * FluffyDBPC["size"][2] - 2);
         height_r = 0.5*(0.5 * FluffyDBPC["size"][2] - 1);
-    end    
+    end
 
-    update_bars(fluffy.ability_autoshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t);
-    update_bars(fluffy.ability_aimedshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t);
-    update_bars(fluffy.ability_arcaneshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t);
-    update_bars(fluffy.ability_steadyshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t);
-    update_bars(fluffy.ability_multishot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t);
-    update_bars(fluffy.ability_raptorstrike, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_m, t);
-    update_bars(fluffy.ability_meleestrike, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_m, t);
+    -- Determine which ability should be shown next in baked rotation mode
+    local next_ability = find_next_ability_to_cast(t);
+
+    update_bars(fluffy.ability_autoshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
+    update_bars(fluffy.ability_aimedshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
+    update_bars(fluffy.ability_arcaneshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
+    update_bars(fluffy.ability_steadyshot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
+    update_bars(fluffy.ability_multishot, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
+    update_bars(fluffy.ability_raptorstrike, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_m, t, next_ability);
+    update_bars(fluffy.ability_meleestrike, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_m, t, next_ability);
 
     -- wipe(windows);
 end
@@ -642,16 +687,22 @@ local function gui_Update(self, elapsed)
         fluffy.last_update = t;
 
         if fluffy.rotation_label then
-            fluffy.rotation_label:SetText(fluffy.rotation_mode);
-            local mode = fluffy.rotation_mode;
-            if mode == "French" or mode == "LongFrench" then
-                fluffy.rotation_label:SetTextColor(1, 0.82, 0, 1);
-            elseif mode == "Skipping" or mode == "1:1" then
-                fluffy.rotation_label:SetTextColor(1, 0.55, 0.05, 1);
-            elseif mode == "2:3" or mode == "1:2" or mode == "2:5" then
-                fluffy.rotation_label:SetTextColor(0.6, 1, 0.2, 1);
+            -- Show/hide rotation mode label based on setting
+            if FluffyDBPC["show_rotation_mode"][1] then
+                fluffy.rotation_label:SetText(fluffy.rotation_mode);
+                fluffy.rotation_label:Show();
+                local mode = fluffy.rotation_mode;
+                if mode == "French" or mode == "LongFrench" then
+                    fluffy.rotation_label:SetTextColor(1, 0.82, 0, 1);
+                elseif mode == "Skipping" or mode == "1:1" then
+                    fluffy.rotation_label:SetTextColor(1, 0.55, 0.05, 1);
+                elseif mode == "2:3" or mode == "1:2" or mode == "2:5" then
+                    fluffy.rotation_label:SetTextColor(0.6, 1, 0.2, 1);
+                else
+                    fluffy.rotation_label:SetTextColor(1, 0.2, 0.2, 1);
+                end
             else
-                fluffy.rotation_label:SetTextColor(1, 0.2, 0.2, 1);
+                fluffy.rotation_label:Hide();
             end
         end
 

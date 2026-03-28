@@ -46,7 +46,10 @@ local function print_help(msg)
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."length|r |c"..fluffy.msg_color_caution.."n|r' sets the bar length to show recommendations 'n' seconds into the future");
 	print("------------------");
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."latency|r' shows current measured latency and compensation offset");
-	
+	print("------------------");
+	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."baked_rotation|r' |c"..fluffy.msg_color_caution.."toggles|r rotation-aware mode (shows only next ability to cast for your speed)");
+	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."show_mode|r' |c"..fluffy.msg_color_caution.."toggles|r displaying the rotation mode label above the bar");
+
 end
 
 
@@ -368,6 +371,14 @@ SlashCmdList["FLUFFY_BAR"] = function(msg)
 		print("  Home: " .. (home or "?") .. " ms  |  World: " .. (world or "?") .. " ms");
 		print("  Compensation offset applied: |c"..fluffy.msg_color_info.. ms .."|r ms  (clamped to 50-500 ms)");
 		print("  Current rotation: |c"..fluffy.msg_color_info..fluffy.rotation_mode.."|r  (eWS: " .. string.format("%.2f", fluffy.rotation_ews) .. "s)");
+	elseif cmd == "baked_rotation" and nargs == 0 then
+		FluffyDBPC["baked_rotation"][1] = not FluffyDBPC["baked_rotation"][1];
+		local state = FluffyDBPC["baked_rotation"][1] and "|c"..fluffy.msg_color_ok.."ON" or "|c"..fluffy.msg_color_caution.."OFF";
+		print("|c"..fluffy.msg_color_info.."Baked Rotation Mode|r set to " .. state .. "|r (shows only next recommended ability for your rotation speed)");
+	elseif cmd == "show_mode" and nargs == 0 then
+		FluffyDBPC["show_rotation_mode"][1] = not FluffyDBPC["show_rotation_mode"][1];
+		local state = FluffyDBPC["show_rotation_mode"][1] and "|c"..fluffy.msg_color_ok.."ON" or "|c"..fluffy.msg_color_caution.."OFF";
+		print("|c"..fluffy.msg_color_info.."Rotation Mode Display|r set to " .. state .. "|r");
 	else
 		print_help(msg);
 	end
