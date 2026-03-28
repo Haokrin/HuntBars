@@ -156,13 +156,15 @@ function update_size()
 	update_visibility();
 end
 
--- Finds the next ability to cast by finding the earliest window start time.
--- Used in "baked rotation" mode to show only the next recommended ability.
+-- Finds the next ability to cast by finding the earliest window start time,
+-- including windows that haven't started yet. This shows what's coming next in
+-- the next segment (up to 3 segments ahead based on bar length).
 local function find_next_ability_to_cast(t)
 	local next_ability = nil;
 	local earliest_time = math.huge;
+	local look_ahead_window = 10;  -- Look ahead up to 10 seconds for the next ability
 
-	-- Check all active abilities for the earliest window start
+	-- Check all active abilities for the earliest window start (current or future)
 	local abilities = {
 		fluffy.ability_steadyshot,
 		fluffy.ability_multishot,
@@ -174,7 +176,8 @@ local function find_next_ability_to_cast(t)
 	for _, ability in pairs(abilities) do
 		if #ability["windows_s"] > 0 then
 			local window_start = ability["windows_s"][1];
-			if window_start >= t and window_start < earliest_time then
+			-- Show ability if it's currently happening or coming up within look_ahead_window
+			if window_start < t + look_ahead_window and window_start < earliest_time then
 				earliest_time = window_start;
 				next_ability = ability;
 			end
