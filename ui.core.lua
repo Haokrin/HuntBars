@@ -165,13 +165,18 @@ local function find_next_ability_to_cast(t, look_ahead_seconds)
 
 	look_ahead_seconds = look_ahead_seconds or 3.4;
 
+	-- Ranged DPS abilities (always included in baked rotation)
 	local abilities = {
 		fluffy.ability_steadyshot,
 		fluffy.ability_multishot,
-		fluffy.ability_arcaneshot,
-		fluffy.ability_raptorstrike,
-		fluffy.ability_meleestrike
+		fluffy.ability_arcaneshot
 	};
+
+	-- Melee abilities (only included if melee weaving is enabled)
+	if FluffyDBPC["baked_include_melee"][1] then
+		table.insert(abilities, fluffy.ability_raptorstrike);
+		table.insert(abilities, fluffy.ability_meleestrike);
+	end
 
 	for _, ability in pairs(abilities) do
 		local Ws = ability["windows_s"];
