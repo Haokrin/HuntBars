@@ -223,6 +223,18 @@ function round(val, decimal)
 		FluffyDBPC["hide_autoshotbar_when_casting"] = {false};
 	end
 
+	if FluffyDBPC["baked_rotation"] == nil then
+		FluffyDBPC["baked_rotation"] = {false};
+	end
+
+	if FluffyDBPC["show_rotation_mode"] == nil then
+		FluffyDBPC["show_rotation_mode"] = {true};
+	end
+
+	if FluffyDBPC["baked_include_melee"] == nil then
+		FluffyDBPC["baked_include_melee"] = {false};
+	end
+
 	if FluffyDBPC["quiver"] == nil then
 		FluffyDBPC["quiver"] = {};
 	end
