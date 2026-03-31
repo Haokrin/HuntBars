@@ -99,11 +99,12 @@ fluffy.movement_spark_interval = 0.5;
 
 -- ---------------------------------------------------------------------------
 -- Latency compensation
--- GetNetStats() returns home/world latency in ms. We cache it every 5 s and
--- add it to cast_finishes so we never recommend the next GCD before the server
--- has fully registered the current cast. This prevents auto-shot clipping on
--- connections with >~80 ms ping (very common on EU servers).
--- Clamped to [0.05, 0.5] seconds.
+-- GetNetStats() returns home/world latency in ms. We cache it every 0.5 s
+-- (with exponential smoothing, alpha=0.3) and add it to cast_finishes so we
+-- never recommend the next GCD before the server has fully registered the
+-- current cast. Also applied as a hard cap on Steady Shot and Multi-Shot
+-- window ends so casts with non-zero cast times cannot clip the autoshot on
+-- high-ping connections. Clamped to [0.05, 0.5] seconds.
 -- ---------------------------------------------------------------------------
 fluffy.latency            = 0.1;   -- seconds, default until first measurement
 fluffy.latency_last_check = 0;     -- GetTime() stamp of last GetNetStats() call
