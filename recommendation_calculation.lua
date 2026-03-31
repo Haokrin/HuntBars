@@ -182,10 +182,12 @@ local function sort_ability_priority(a, b)
     return ability_priority_dmg[a] > ability_priority_dmg[b];
 end
 
--- Rotation-aware priority: Multi > Arcane > Steady.
--- Steady is always the filler (lowest priority). Multi and Arcane are
--- used on cooldown and must claim their windows first. Among non-Steady
--- abilities, sort by damage to break ties correctly.
+-- Rotation-aware priority: Steady > Multi > Arcane.
+-- Per diziet559's rotation tools: "Only cast steady immediately following
+-- an auto. Cast multi/arcane tastefully where you cannot fit a steady."
+-- Steady Shot is the primary weaver (highest priority), Multi and Arcane
+-- are situational gap-fillers (lower priority). Among Multi and Arcane,
+-- sort by damage to break ties.
 local function sort_ability_priority_rotation(a, b)
     local A = ability_priority_abilities[a];
     local B = ability_priority_abilities[b];
@@ -193,7 +195,7 @@ local function sort_ability_priority_rotation(a, b)
     local b_is_steady = (B == fluffy.ability_steadyshot);
 
     if a_is_steady ~= b_is_steady then
-        return b_is_steady;  -- non-Steady beats Steady
+        return a_is_steady;  -- Steady beats non-Steady
     end
     -- Both Steady or both non-Steady: sort by damage
     return ability_priority_dmg[a] > ability_priority_dmg[b];
@@ -213,10 +215,9 @@ local function optimize_intervals_simple()
     end
 
     -- clipping of interval ends
-    -- Use damage-based sort so highest-DPCT abilities (Multi > Arcane) get
-    -- priority window claims over the filler (Steady).  The previous
-    -- sort_ability_priority_2 gave Steady first pick, which blocked Multi and
-    -- Arcane from ever appearing because Steady fills all gaps.
+    -- Use rotation-aware sort so Steady gets priority (primary weaver),
+    -- then Multi and Arcane (secondary gap-fillers). Steady must claim
+    -- windows first so Multi/Arcane don't squeeze it out.
     table.sort(ability_priority_indices, sort_ability_priority_rotation);
 
     for i_tmp=1,#ability_priority_indices do 
