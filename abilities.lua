@@ -455,7 +455,7 @@ fluffy.ability_multishot["cdb"] = function(t)
 	return 10;
 end
 fluffy.ability_steadyshot["cdb"] = function(t)
-	return 1.5 - 1.5 * get_haste_mod_ranged(t);
+	return 0;
 end
 fluffy.ability_raptorstrike["cdb"] = function(t)
 	return 6.0;
