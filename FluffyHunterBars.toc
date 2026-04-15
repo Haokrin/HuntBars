@@ -39,6 +39,9 @@ ammo_handler.lua
 equipment_handler.lua
 
 ui.elems.lua
+ui.layout.lua
+ui.render.lua
+ui.labels.lua
 ui.core.lua
 core.lua
 
