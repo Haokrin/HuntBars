@@ -13,7 +13,6 @@
 ## SavedVariablesPerCharacter: FluffyDBPC
 
 # helper files
-config.token_limit.lua
 preamble.debug.lua
 
 preamble.variables.lua
