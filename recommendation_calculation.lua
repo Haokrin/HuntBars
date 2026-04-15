@@ -111,21 +111,22 @@ local function optimize_towards_autoshot()
 			end
         end
 
-        if #intervals_abilities_starts_tmp > 0 then
-            wipe(intervals_abilities_starts[A]);
-            wipe(intervals_abilities_ends[A]);
-    
-            for k, v in pairs(intervals_abilities_starts_tmp) do
-                table.insert(intervals_abilities_starts[A], v);
-            end
-    
-            for k, v in pairs(intervals_abilities_ends_tmp) do
-                table.insert(intervals_abilities_ends[A], v);
-            end
-    
-            wipe(intervals_abilities_starts_tmp);
-            wipe(intervals_abilities_ends_tmp);
+        -- Always replace intervals to avoid preserving stale full-bar when
+        -- clipping produces zero-width windows (e.g. steady at extreme haste).
+        -- If _tmp is empty, wipe original to show ability has no windows.
+        wipe(intervals_abilities_starts[A]);
+        wipe(intervals_abilities_ends[A]);
+
+        for k, v in pairs(intervals_abilities_starts_tmp) do
+            table.insert(intervals_abilities_starts[A], v);
         end
+
+        for k, v in pairs(intervals_abilities_ends_tmp) do
+            table.insert(intervals_abilities_ends[A], v);
+        end
+
+        wipe(intervals_abilities_starts_tmp);
+        wipe(intervals_abilities_ends_tmp);
     end
 end
 
@@ -158,21 +159,21 @@ local function set_minus(A, ts_B, te_B)
         end
     end
 
-    if #intervals_abilities_starts_tmp > 0 then
-        wipe(intervals_abilities_starts[A]);
-        wipe(intervals_abilities_ends[A]);
+    -- Always replace intervals to avoid preserving stale full-bar when
+    -- clipping produces zero-width windows.
+    wipe(intervals_abilities_starts[A]);
+    wipe(intervals_abilities_ends[A]);
 
-        for k, v in pairs(intervals_abilities_starts_tmp) do
-            table.insert(intervals_abilities_starts[A], v);
-        end
-
-        for k, v in pairs(intervals_abilities_ends_tmp) do
-            table.insert(intervals_abilities_ends[A], v);
-        end
-
-        wipe(intervals_abilities_starts_tmp);
-        wipe(intervals_abilities_ends_tmp);
+    for k, v in pairs(intervals_abilities_starts_tmp) do
+        table.insert(intervals_abilities_starts[A], v);
     end
+
+    for k, v in pairs(intervals_abilities_ends_tmp) do
+        table.insert(intervals_abilities_ends[A], v);
+    end
+
+    wipe(intervals_abilities_starts_tmp);
+    wipe(intervals_abilities_ends_tmp);
 end
 
 local ability_priority_indices = {};
