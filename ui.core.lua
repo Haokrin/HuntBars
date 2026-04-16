@@ -94,6 +94,45 @@ local function gui_Update(self, elapsed)
     local fluffyBar_len_s = fluffy.bar_len_seconds;
 
     -- -----------------------------------------------------------------------
+    -- OVERDUE FREEZE: if autoshot should have fired but didn't, freeze bars
+    -- in place instead of rolling back to a new predicted position.
+    -- -----------------------------------------------------------------------
+    local next_start_check = fluffy.ability_autoshot["next_start"];
+    local autoshot_overdue = false;
+    if next_start_check > 0 and not fluffy.is_casting_autoshot then
+        local est_cast = 0.5;
+        if fluffy.rotation_ews > 0.1 and fluffy.ranged_base_speed > 0 then
+            est_cast = fluffy.rotation_ews * 0.5 / fluffy.ranged_base_speed;
+        end
+        autoshot_overdue = (next_start_check + est_cast * 1.2) < t;
+    end
+
+    if autoshot_overdue then
+        if not fluffy.autoshot_frozen then
+            fluffy.autoshot_frozen = true;
+            fluffy.freeze_time = t;
+        end
+        -- Decay spark correction during freeze to avoid buildup.
+        if fluffy.spark_correction ~= 0 then
+            local dt    = min(elapsed, 0.1);
+            local decay = 0.5 ^ (dt / 0.15);
+            fluffy.spark_correction = fluffy.spark_correction * decay;
+            if math.abs(fluffy.spark_correction) < 0.001 then
+                fluffy.spark_correction = 0;
+            end
+        end
+        fluffy.draw_frame(fluffy.freeze_time, fluffyBar_len, fluffyBar_len_s);
+        fluffy.update_labels(fluffy.freeze_time);
+        return;
+    end
+
+    if fluffy.autoshot_frozen then
+        fluffy.autoshot_frozen = false;
+        fluffy.prev_spark_1 = 0;
+        fluffy.prev_spark_2 = 0;
+    end
+
+    -- -----------------------------------------------------------------------
     -- LOGIC: recalculate ability windows every frame so render t == logic t,
     -- eliminating the sawtooth jitter that throttling caused.
     -- -----------------------------------------------------------------------
