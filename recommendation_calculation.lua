@@ -274,7 +274,10 @@ local function optimize_intervals_simple()
 
                         if (ts_B < te_B) and (ts_B >= te_A) then
                             -- print(- get_point_of_equilibrium_abilities(dmg_A, dmg_B));
-                            te_A = min(te_A, ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B));
+                            -- Reserve cast time + latency for B (priority ability) to complete before A's window ends.
+                            -- At high haste, B's cast time is short; without this buffer, lower-priority A squeezes in.
+                            local b_cast_time = B["cast"](ts_B);
+                            te_A = min(te_A, ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B) - b_cast_time - fluffy.latency);
                         end
                     end
     
