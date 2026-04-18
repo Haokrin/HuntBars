@@ -276,11 +276,16 @@ local function optimize_intervals_simple()
                         local te_B = ints_B_e[l];
 
                         if (ts_B < te_B) and (ts_B >= te_A) then
-                            -- print(- get_point_of_equilibrium_abilities(dmg_A, dmg_B));
-                            -- Reserve cast time + latency for B (priority ability) to complete before A's window ends.
-                            -- At high haste, B's cast time is short; without this buffer, lower-priority A squeezes in.
+                            -- Reserve cast time + latency for B (priority ability) so A
+                            -- does not squeeze in and push B out at high haste.
+                            -- Only clip when the result leaves A's window non-empty;
+                            -- otherwise lower-priority abilities (Arcane) get erased
+                            -- entirely when B's next window is far in the future.
                             local b_cast_time = B["cast"](ts_B);
-                            te_A = min(te_A, ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B) - b_cast_time - fluffy.latency);
+                            local clip_target = ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B) - b_cast_time - fluffy.latency;
+                            if clip_target > ts_A then
+                                te_A = min(te_A, clip_target);
+                            end
                         end
                     end
     
