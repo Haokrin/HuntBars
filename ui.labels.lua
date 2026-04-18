@@ -77,13 +77,14 @@ fluffy.update_labels = function(t)
     end
 
     -- Latency label (top-right) ----------------------------------------------
-    -- Colour thresholds: green < 100 ms, yellow < 200 ms, red >= 200 ms.
+    -- Shows one-way compensation value. Colour thresholds (one-way):
+    -- green < 50 ms (=100 ms RTT), yellow < 100 ms (=200 ms RTT), red >=.
     if fluffy.latency_label then
         local ms = math.floor(fluffy.latency * 1000 + 0.5);
         fluffy.latency_label:SetText(ms .. " ms");
-        if ms < 100 then
+        if ms < 50 then
             fluffy.latency_label:SetTextColor(0.4, 1, 0.4, 1);
-        elseif ms < 200 then
+        elseif ms < 100 then
             fluffy.latency_label:SetTextColor(1, 0.85, 0.1, 1);
         else
             fluffy.latency_label:SetTextColor(1, 0.3, 0.3, 1);

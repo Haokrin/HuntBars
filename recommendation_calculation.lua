@@ -66,17 +66,14 @@ local function optimize_towards_autoshot()
                 if A == fluffy.ability_steadyshot then
                     -- Steady: use DPS equilibrium to find how early to stop.
                     -- Also apply the same cast_time + latency hard cap used for
-                    -- Multi-Shot: even if DPS says to keep casting until the
-                    -- equilibrium point, the server won't receive the cast start
-                    -- until fluffy.latency seconds later, so the full 1.5 s cast
-                    -- would finish after the autoshot arrives on high-ping
-                    -- connections.
+                    -- Multi-Shot: the cast must finish (plus network latency) before
+                    -- the next autoshot starts casting, otherwise steady would clip
+                    -- the autoshot. If there is no safe time window for steady, the
+                    -- resulting inverted interval is discarded by the tolerance
+                    -- check below so the bar does not mislead the user.
                     local cast_time = A["cast"](auto_ts);
                     f = min(f, get_point_of_equilibrium_autoshot(A, auto_ts, auto_te));
-                    local hard_cap = auto_ts - cast_time - fluffy.latency;
-                    if hard_cap > ts then
-                        f = min(f, hard_cap);
-                    end
+                    f = min(f, auto_ts - cast_time - fluffy.latency);
                 else
                     -- Multi/Arcane also have a cast time. Pulling the window
                     -- end back by cast(t) ensures we never suggest firing them
@@ -401,8 +398,11 @@ end
 -- ---------------------------------------------------------------------------
 -- Reads GetNetStats() at most once every 0.5 seconds. The function returns
 -- bandwidthIn, bandwidthOut, latencyHome, latencyWorld in milliseconds.
--- We take the larger of the two latency figures and convert to seconds,
--- clamping to a sensible [50 ms, 500 ms] window. An exponential moving
+-- GetNetStats() reports ROUND-TRIP time; for cast-clipping we only care about
+-- one-way client-to-server delay (how long until the server registers our
+-- cast start), so we divide by 2. Using full RTT double-counts the delay and
+-- eats the entire steady window at 1:1 haste levels.
+-- Clamped to a sensible [25 ms, 250 ms] one-way window. An exponential moving
 -- average (alpha=0.3) smooths out transient spikes.
 local function refresh_latency()
     local t = GetTime();
@@ -411,7 +411,7 @@ local function refresh_latency()
     local _, _, home, world = GetNetStats();
     if home and world then
         local ms = max(home or 0, world or 0);
-        local new_latency = max(0.05, min(0.5, ms * 0.001));
+        local new_latency = max(0.025, min(0.25, ms * 0.0005));
         -- Exponential moving average (alpha=0.3) so a single ping spike does
         -- not instantly shift all ability windows; sustained changes still
         -- propagate within a few seconds.
