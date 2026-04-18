@@ -398,8 +398,11 @@ end
 -- ---------------------------------------------------------------------------
 -- Reads GetNetStats() at most once every 0.5 seconds. The function returns
 -- bandwidthIn, bandwidthOut, latencyHome, latencyWorld in milliseconds.
--- We take the larger of the two latency figures and convert to seconds,
--- clamping to a sensible [50 ms, 500 ms] window. An exponential moving
+-- GetNetStats() reports ROUND-TRIP time; for cast-clipping we only care about
+-- one-way client-to-server delay (how long until the server registers our
+-- cast start), so we divide by 2. Using full RTT double-counts the delay and
+-- eats the entire steady window at 1:1 haste levels.
+-- Clamped to a sensible [25 ms, 250 ms] one-way window. An exponential moving
 -- average (alpha=0.3) smooths out transient spikes.
 local function refresh_latency()
     local t = GetTime();
@@ -408,7 +411,7 @@ local function refresh_latency()
     local _, _, home, world = GetNetStats();
     if home and world then
         local ms = max(home or 0, world or 0);
-        local new_latency = max(0.05, min(0.5, ms * 0.001));
+        local new_latency = max(0.025, min(0.25, ms * 0.0005));
         -- Exponential moving average (alpha=0.3) so a single ping spike does
         -- not instantly shift all ability windows; sustained changes still
         -- propagate within a few seconds.

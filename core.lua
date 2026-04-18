@@ -369,8 +369,8 @@ SlashCmdList["FLUFFY_BAR"] = function(msg)
 		local ms = math.floor(fluffy.latency * 1000 + 0.5);
 		local _, _, home, world = GetNetStats();
 		print("|c"..fluffy.msg_color_ok.."Fluffy Hunter Bars|r [|c"..fluffy.msg_color_info.."Latency|r]");
-		print("  Home: " .. (home or "?") .. " ms  |  World: " .. (world or "?") .. " ms");
-		print("  Compensation offset applied: |c"..fluffy.msg_color_info.. ms .."|r ms  (clamped to 50-500 ms)");
+		print("  Home (RTT): " .. (home or "?") .. " ms  |  World (RTT): " .. (world or "?") .. " ms");
+		print("  One-way compensation offset applied: |c"..fluffy.msg_color_info.. ms .."|r ms  (clamped to 25-250 ms)");
 		print("  Current rotation: |c"..fluffy.msg_color_info..fluffy.rotation_mode.."|r  (eWS: " .. string.format("%.2f", fluffy.rotation_ews) .. "s)");
 	elseif cmd == "baked_rotation" and nargs == 0 then
 		FluffyDBPC["baked_rotation"][1] = not FluffyDBPC["baked_rotation"][1];
