@@ -73,7 +73,10 @@ local function optimize_towards_autoshot()
                     -- connections.
                     local cast_time = A["cast"](auto_ts);
                     f = min(f, get_point_of_equilibrium_autoshot(A, auto_ts, auto_te));
-                    f = min(f, auto_ts - cast_time - fluffy.latency);
+                    local hard_cap = auto_ts - cast_time - fluffy.latency;
+                    if hard_cap > ts then
+                        f = min(f, hard_cap);
+                    end
                 else
                     -- Multi/Arcane also have a cast time. Pulling the window
                     -- end back by cast(t) ensures we never suggest firing them
@@ -273,11 +276,16 @@ local function optimize_intervals_simple()
                         local te_B = ints_B_e[l];
 
                         if (ts_B < te_B) and (ts_B >= te_A) then
-                            -- print(- get_point_of_equilibrium_abilities(dmg_A, dmg_B));
-                            -- Reserve cast time + latency for B (priority ability) to complete before A's window ends.
-                            -- At high haste, B's cast time is short; without this buffer, lower-priority A squeezes in.
+                            -- Reserve cast time + latency for B (priority ability) so A
+                            -- does not squeeze in and push B out at high haste.
+                            -- Only clip when the result leaves A's window non-empty;
+                            -- otherwise lower-priority abilities (Arcane) get erased
+                            -- entirely when B's next window is far in the future.
                             local b_cast_time = B["cast"](ts_B);
-                            te_A = min(te_A, ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B) - b_cast_time - fluffy.latency);
+                            local clip_target = ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B) - b_cast_time - fluffy.latency;
+                            if clip_target > ts_A then
+                                te_A = min(te_A, clip_target);
+                            end
                         end
                     end
     
@@ -615,8 +623,8 @@ function analyze_game_state(window_len, t)
     local _, low_mana_steady = IsUsableSpell(fluffy.ability_steadyshot["active_id"]);
 
     show_steady = (fluffy.ability_steadyshot["known"] and not low_mana_steady);
-    show_multi  = (fluffy.ability_multishot["known"]  and not low_mana_multi);
-    show_arcane = (fluffy.ability_arcaneshot["known"] and not low_mana_arcane);
+    show_multi  = (fluffy.ability_multishot["known"]  and not low_mana_multi and FluffyDBPC["consider_multi"][1]);
+    show_arcane = (fluffy.ability_arcaneshot["known"] and not low_mana_arcane and FluffyDBPC["consider_arcane"][1]);
 
     if show_arcane then
         table.insert(abilities_to_consider, fluffy.ability_arcaneshot);
