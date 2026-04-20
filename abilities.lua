@@ -455,7 +455,7 @@ fluffy.ability_multishot["cdb"] = function(t)
 	return 10;
 end
 fluffy.ability_steadyshot["cdb"] = function(t)
-	return 1.5 - 1.5 * get_haste_mod_ranged(t);
+	return 1.5 - 1.0 * get_haste_mod_ranged(t);
 end
 fluffy.ability_raptorstrike["cdb"] = function(t)
 	return 6.0;
@@ -482,7 +482,7 @@ fluffy.ability_multishot["cast"] = function(t)
 	return 0.5 * get_haste_mod_ranged(t);
 end
 fluffy.ability_steadyshot["cast"] = function(t)
-	return 1.5 * get_haste_mod_ranged(t);
+	return 1.0 * get_haste_mod_ranged(t);
 end
 fluffy.ability_raptorstrike["cast"] = function(t)
 	if fluffy.client_version > 11307 then

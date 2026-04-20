@@ -65,6 +65,7 @@ local function optimize_towards_autoshot()
 
                 if A == fluffy.ability_steadyshot then
                     local cast_time = A["cast"](auto_ts);
+                    f = min(f, get_point_of_equilibrium_autoshot(A, auto_ts, auto_te));
                     f = min(f, auto_ts - cast_time - fluffy.latency);
                 else
                     -- Multi/Arcane also have a cast time. Pulling the window
