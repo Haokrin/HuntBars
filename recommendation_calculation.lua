@@ -64,13 +64,6 @@ local function optimize_towards_autoshot()
                 local f = auto_ts;
 
                 if A == fluffy.ability_steadyshot then
-                    -- Steady: use DPS equilibrium to find how early to stop.
-                    -- Also apply the same cast_time + latency hard cap used for
-                    -- Multi-Shot: the cast must finish (plus network latency) before
-                    -- the next autoshot starts casting, otherwise steady would clip
-                    -- the autoshot. If there is no safe time window for steady, the
-                    -- resulting inverted interval is discarded by the tolerance
-                    -- check below so the bar does not mislead the user.
                     local cast_time = A["cast"](auto_ts);
                     f = min(f, get_point_of_equilibrium_autoshot(A, auto_ts, auto_te));
                     f = min(f, auto_ts - cast_time - fluffy.latency);

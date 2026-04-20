@@ -214,6 +214,10 @@ function round(val, decimal)
 	if FluffyDBPC["show_only_in_combat"] == nil then
 		FluffyDBPC["show_only_in_combat"] = {false};
 	end
+
+	if FluffyDBPC["range_secondary"] == nil then
+		FluffyDBPC["range_secondary"] = {false};
+	end
 	
 	if FluffyDBPC["window_length"] == nil then
 		FluffyDBPC["window_length"] = 3;

@@ -41,6 +41,7 @@ local function print_help(msg)
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."use_arcane|r' |c"..fluffy.msg_color_caution.." toggles|r displaying recommendations for |c"..fluffy.msg_color_info.."'Arcane Shot'|r");
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."use_multi|r' |c"..fluffy.msg_color_caution.." toggles|r displaying recommendations for |c"..fluffy.msg_color_info.."'Multi-Shot'|r");
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."use_melee|r' |c"..fluffy.msg_color_caution.." toggles|r displaying recommendations for |c"..fluffy.msg_color_info.."'Melee abilities'|r");
+	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."rangeonly|r' |c"..fluffy.msg_color_caution.." toggles|r moving |c"..fluffy.msg_color_info.."Multi-Shot and Arcane Shot|r to secondary (lower) row");
 	print("------------------");
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."incombat|r' |c"..fluffy.msg_color_caution.." toggles|r displaying the bars only in combat");
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."length|r |c"..fluffy.msg_color_caution.."n|r' sets the bar length to show recommendations 'n' seconds into the future");
@@ -361,6 +362,10 @@ SlashCmdList["FLUFFY_BAR"] = function(msg)
 		FluffyDBPC["consider_multi"][1] = not FluffyDBPC["consider_multi"][1]
 	elseif cmd == "use_melee" and nargs == 0 then
 		FluffyDBPC["consider_melee"][1] = not FluffyDBPC["consider_melee"][1]
+	elseif cmd == "rangeonly" and nargs == 0 then
+		FluffyDBPC["range_secondary"][1] = not FluffyDBPC["range_secondary"][1];
+		local state = FluffyDBPC["range_secondary"][1] and "|c"..fluffy.msg_color_ok.."ON" or "|c"..fluffy.msg_color_caution.."OFF";
+		print("|c"..fluffy.msg_color_info.."Range Secondary Mode|r set to " .. state .. "|r (Multi-Shot and Arcane Shot shown in lower row)");
 	elseif cmd == "incombat" and nargs == 0 then
 		FluffyDBPC["show_only_in_combat"][1] = not FluffyDBPC["show_only_in_combat"][1]
 	elseif cmd == "length" and nargs == 1 then
