@@ -156,24 +156,26 @@ end
 -- ---------------------------------------------------------------------------
 local function draw_intervals(t, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds)
 
-    -- Ranged bars sit in the top half; melee in the bottom half.
+    -- Ranged bars sit in the top half; melee (and optionally Multi/Arcane) in the bottom half.
     local height_m = 0;
     local height_r = 0;
-    if FluffyDBPC["consider_melee"][1] ~= false then
+    local split_ranged = FluffyDBPC["range_secondary"] and FluffyDBPC["range_secondary"][1];
+    if FluffyDBPC["consider_melee"][1] ~= false or split_ranged then
         height_m = -0.5 * (0.5 * FluffyDBPC["size"][2] - 2);
         height_r =  0.5 * (0.5 * FluffyDBPC["size"][2] - 1);
     end
+    local height_sec = split_ranged and height_m or height_r;
 
     local next_ability = find_next_ability_to_cast(t, fluffyBar_len_seconds);
     fluffy.baked_next_ability_name = next_ability and next_ability["name"] or nil;
 
-    update_bars(fluffy.ability_autoshot,     left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
-    update_bars(fluffy.ability_aimedshot,    left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
-    update_bars(fluffy.ability_arcaneshot,   left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
-    update_bars(fluffy.ability_steadyshot,   left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
-    update_bars(fluffy.ability_multishot,    left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r, t, next_ability);
-    update_bars(fluffy.ability_raptorstrike, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_m, t, next_ability);
-    update_bars(fluffy.ability_meleestrike,  left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_m, t, next_ability);
+    update_bars(fluffy.ability_autoshot,     left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r,   t, next_ability);
+    update_bars(fluffy.ability_aimedshot,    left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r,   t, next_ability);
+    update_bars(fluffy.ability_arcaneshot,   left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_sec, t, next_ability);
+    update_bars(fluffy.ability_steadyshot,   left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_r,   t, next_ability);
+    update_bars(fluffy.ability_multishot,    left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_sec, t, next_ability);
+    update_bars(fluffy.ability_raptorstrike, left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_m,   t, next_ability);
+    update_bars(fluffy.ability_meleestrike,  left_shift_px, shift_y, fluffyBar_len, fluffyBar_len_seconds, height_m,   t, next_ability);
 end
 
 -- ---------------------------------------------------------------------------
