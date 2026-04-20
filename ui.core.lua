@@ -139,7 +139,7 @@ local function gui_Update(self, elapsed)
     fluffy.logic_dirty = false;
     update_spell_data();
 
-    fluffy.bar_len_seconds = FluffyDBPC["window_length"] + fluffy.latency;
+    fluffy.bar_len_seconds = FluffyDBPC["window_length"];
     fluffyBar_len_s = fluffy.bar_len_seconds;
     analyze_game_state(fluffyBar_len_s, t);
 
