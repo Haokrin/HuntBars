@@ -530,7 +530,7 @@ function analyze_game_state(window_len, t)
 
     local spell, _, _, _, endTime = UnitCastingInfo("player");
     if not fluffy.is_casting_autoshot then
-        fluffy.cast_finishes = t;
+        fluffy.cast_finishes = max(t, fluffy.cast_finishes);
     else
         -- During autoshot cast, set cast_finishes to next_start (cooldown end).
         -- Do NOT push it forward with UnitCastingInfo's endTime — the autoshot
