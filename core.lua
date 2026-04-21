@@ -371,7 +371,7 @@ SlashCmdList["FLUFFY_BAR"] = function(msg)
 	elseif cmd == "length" and nargs == 1 then
 		FluffyDBPC["window_length"] = tonumber(args[1]);
 	elseif cmd == "latency" and nargs == 0 then
-		local ms = math.floor(fluffy.latency * 1000 + 0.5);
+		local ms = latency_to_ms(fluffy.latency);
 		local _, _, home, world = GetNetStats();
 		print("|c"..fluffy.msg_color_ok.."Fluffy Hunter Bars|r [|c"..fluffy.msg_color_info.."Latency|r]");
 		print("  Home (RTT): " .. (home or "?") .. " ms  |  World (RTT): " .. (world or "?") .. " ms");

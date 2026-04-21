@@ -50,6 +50,19 @@ local intervals_abilities_ends   = {};
 local intervals_abilities_starts_tmp = {};
 local intervals_abilities_ends_tmp   = {};
 
+local function initialize_intervals()
+	intervals_abilities_starts[fluffy.ability_autoshot] = {};
+	intervals_abilities_ends[fluffy.ability_autoshot] = {};
+	intervals_abilities_starts[fluffy.ability_aimedshot] = {};
+	intervals_abilities_ends[fluffy.ability_aimedshot] = {};
+	intervals_abilities_starts[fluffy.ability_steadyshot] = {};
+	intervals_abilities_ends[fluffy.ability_steadyshot] = {};
+	intervals_abilities_starts[fluffy.ability_multishot] = {};
+	intervals_abilities_ends[fluffy.ability_multishot] = {};
+	intervals_abilities_starts[fluffy.ability_arcaneshot] = {};
+	intervals_abilities_ends[fluffy.ability_arcaneshot] = {};
+end
+
 
 
 local function optimize_towards_autoshot()
@@ -64,6 +77,12 @@ local function optimize_towards_autoshot()
                 local f = auto_ts;
 
                 if A == fluffy.ability_steadyshot then
+                    -- Steady Shot: use DPS equilibrium as primary cap, but also apply
+                    -- a hard safety cap based on cast time and latency. The equilibrium
+                    -- point maximizes single-target DPS against autoshot, but on high-ping
+                    -- connections (fluffy.latency > 0), the server may not register the
+                    -- cast start until latency seconds later. Without the hard cap, even
+                    -- the equilibrium-bounded cast could finish after the autoshot arrives.
                     local cast_time = A["cast"](auto_ts);
                     f = min(f, get_point_of_equilibrium_autoshot(A, auto_ts, auto_te));
                     f = min(f, auto_ts - cast_time - fluffy.latency);
@@ -456,7 +475,9 @@ local abilities_to_consider = {};
 local last_time_moved = 0;
 function analyze_game_state(window_len, t)
 
-
+    if intervals_abilities_starts[fluffy.ability_autoshot] == nil then
+        initialize_intervals();
+    end
     -- t is passed in from gui_Update so logic and render share one timestamp.
     -- The throttle is now handled entirely by gui_Update (last_logic_update).
     t = t or GetTime();
@@ -621,38 +642,14 @@ function analyze_game_state(window_len, t)
 
     if show_arcane then
         table.insert(abilities_to_consider, fluffy.ability_arcaneshot);
-        if intervals_abilities_starts[fluffy.ability_arcaneshot] == nil then
-            intervals_abilities_starts[fluffy.ability_arcaneshot] = {};
-        end
-        if intervals_abilities_ends[fluffy.ability_arcaneshot] == nil then
-            intervals_abilities_ends[fluffy.ability_arcaneshot] = {};
-        end
     end
 
     if show_multi then
         table.insert(abilities_to_consider, fluffy.ability_multishot);
-        if intervals_abilities_starts[fluffy.ability_multishot] == nil then
-            intervals_abilities_starts[fluffy.ability_multishot] = {};
-        end
-        if intervals_abilities_ends[fluffy.ability_multishot] == nil then
-            intervals_abilities_ends[fluffy.ability_multishot] = {};
-        end
     end
 
     if show_steady then
         table.insert(abilities_to_consider, fluffy.ability_steadyshot);
-        if intervals_abilities_starts[fluffy.ability_steadyshot] == nil then
-            intervals_abilities_starts[fluffy.ability_steadyshot] = {};
-        end
-        if intervals_abilities_ends[fluffy.ability_steadyshot] == nil then
-            intervals_abilities_ends[fluffy.ability_steadyshot] = {};
-        end
-    end
-    if intervals_abilities_starts[fluffy.ability_autoshot] == nil then
-        intervals_abilities_starts[fluffy.ability_autoshot] = {};
-    end
-    if intervals_abilities_ends[fluffy.ability_autoshot] == nil then
-        intervals_abilities_ends[fluffy.ability_autoshot] = {};
     end
 
     -- print(fluffy.ability_arcaneshot["dmg"]());

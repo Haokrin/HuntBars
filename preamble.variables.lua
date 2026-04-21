@@ -110,6 +110,8 @@ fluffy.movement_spark_interval = 0.5;
 -- ---------------------------------------------------------------------------
 fluffy.latency            = 0.05;  -- seconds one-way, default until first measurement
 fluffy.latency_last_check = 0;     -- GetTime() stamp of last GetNetStats() call
+fluffy.latency_color_threshold_green = 0.05;  -- 50 ms one-way (100 ms RTT)
+fluffy.latency_color_threshold_yellow = 0.1;  -- 100 ms one-way (200 ms RTT)
 
 -- ---------------------------------------------------------------------------
 -- Rotation mode (updated every frame from effective weapon speed)
