@@ -85,6 +85,10 @@ function round(val, decimal)
 	  return math.floor(val+0.5)
 	end
   end
+
+function latency_to_ms(latency)
+	return math.floor(latency * 1000 + 0.5)
+end
   
   function format_num(amount, decimal, prefix, neg_prefix)
 	local str_amount,  formatted, famount, remain
