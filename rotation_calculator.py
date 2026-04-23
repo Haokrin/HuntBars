@@ -7,8 +7,7 @@ rotation mode detection, and ability timing windows.
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Tuple, Optional
-import math
+from typing import Dict, Optional
 
 
 class RotationMode(Enum):
@@ -44,7 +43,9 @@ HASTE_BUFFS = {
     "bloodlust": HasteBuff("Bloodlust", 1.3, False, HasteBuffType.BOTH),
     "heroism": HasteBuff("Heroism", 1.3, False, HasteBuffType.BOTH),
     "berserking": HasteBuff("Berserking", 1.1, False, HasteBuffType.BOTH),
-    "quick_shots": HasteBuff("Quick Shots", 1.0, False, HasteBuffType.RANGED),
+    # Quick Shots (Improved Aspect of the Hawk) is a dynamic proc — value varies
+    # by rank (typically 1.15–1.30). Pass the actual multiplier when adding this buff.
+    "quick_shots": HasteBuff("Quick Shots", 1.2, False, HasteBuffType.RANGED),
     "haste_potion": HasteBuff("Haste Potion", 400, True, HasteBuffType.BOTH),
     "abacus": HasteBuff("Abacus of Violent Odds", 260, True, HasteBuffType.BOTH),
     "dragonspine": HasteBuff("Dragonspine Trophy", 325, True, HasteBuffType.BOTH),
@@ -204,10 +205,10 @@ class RotationCalculator:
         Returns:
             Dict with keys: eWS, rotation_mode, haste_mod_ranged, haste_mod_melee
         """
-        eWS = self.get_effective_weapon_speed(haste_config)
-        rotation_mode = self.detect_rotation_mode(eWS)
         haste_mod_ranged = self.get_haste_mod_ranged(haste_config)
         haste_mod_melee = self.get_haste_mod_melee(haste_config)
+        eWS = self.player_stats.ranged_base_speed * haste_mod_ranged
+        rotation_mode = self.detect_rotation_mode(eWS)
 
         return {
             "eWS": eWS,

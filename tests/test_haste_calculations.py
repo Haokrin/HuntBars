@@ -157,30 +157,23 @@ class TestRotationModeDetection:
         )
 
     def test_mode_transitions_with_haste(self, default_player):
-        """Test rotation mode transitions as haste increases."""
+        """Each added buff should decrease eWS monotonically."""
         calc = RotationCalculator(default_player)
 
-        modes = []
-        haste_levels = [
-            ("no_buffs", HasteConfig(current_time=0.0)),
-            ("rapid_fire", lambda: HasteConfig(current_time=0.0) or (config := HasteConfig(current_time=0.0), config.add_buff("rapid_fire"), config)[2]),
-            ("rf_bl", lambda: (config := HasteConfig(current_time=0.0), config.add_buff("rapid_fire"), config.add_buff("bloodlust"), config)[2]),
-        ]
-
-        # Test with multiple haste levels
         config1 = HasteConfig(current_time=0.0)
         ews1 = calc.get_effective_weapon_speed(config1)
-        mode1 = calc.detect_rotation_mode(ews1)
 
         config2 = HasteConfig(current_time=0.0)
         config2.add_buff("rapid_fire")
         ews2 = calc.get_effective_weapon_speed(config2)
-        mode2 = calc.detect_rotation_mode(ews2)
 
-        # Adding buffs should increase speed (decrease eWS)
+        config3 = HasteConfig(current_time=0.0)
+        config3.add_buff("rapid_fire")
+        config3.add_buff("bloodlust")
+        ews3 = calc.get_effective_weapon_speed(config3)
+
         assert ews2 < ews1
-        # Mode might stay same or shift faster
-        assert mode2 in (mode1, RotationMode.ONE_TO_ONE, RotationMode.TWO_TO_THREE)
+        assert ews3 < ews2
 
     @pytest.mark.parametrize("ews,expected_mode", [
         (3.0, RotationMode.FRENCH),

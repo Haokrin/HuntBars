@@ -13,11 +13,6 @@ from rotation_calculator import (
 )
 
 
-def print_result(config_name, result):
-    """Pretty-print rotation calculation result."""
-    print(f"\n{config_name:40} | eWS: {result['eWS']:.2f}s | Mode: {result['rotation_mode'].value:12}")
-
-
 def test_raid_progression():
     """Test rotation modes through raid progression (slow to fast gear)."""
     print("\n" + "="*90)
