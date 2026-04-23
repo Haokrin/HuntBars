@@ -43,9 +43,10 @@ HASTE_BUFFS = {
     "bloodlust": HasteBuff("Bloodlust", 1.3, False, HasteBuffType.BOTH),
     "heroism": HasteBuff("Heroism", 1.3, False, HasteBuffType.BOTH),
     "berserking": HasteBuff("Berserking", 1.1, False, HasteBuffType.BOTH),
-    # Quick Shots (Improved Aspect of the Hawk) is a dynamic proc — value varies
-    # by rank (typically 1.15–1.30). Pass the actual multiplier when adding this buff.
-    "quick_shots": HasteBuff("Quick Shots", 1.2, False, HasteBuffType.RANGED),
+    # Quick Shots (Improved Aspect of the Hawk) is a dynamic proc. Values vary
+    # based on rank but typically 1.10 (10% haste) is a reasonable middle ground.
+    # Customize by changing this value or pass manually via config.
+    "quick_shots": HasteBuff("Quick Shots", 1.10, False, HasteBuffType.RANGED),
     "haste_potion": HasteBuff("Haste Potion", 400, True, HasteBuffType.BOTH),
     "abacus": HasteBuff("Abacus of Violent Odds", 260, True, HasteBuffType.BOTH),
     "dragonspine": HasteBuff("Dragonspine Trophy", 325, True, HasteBuffType.BOTH),
