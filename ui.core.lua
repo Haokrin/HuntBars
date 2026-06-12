@@ -104,7 +104,14 @@ local function gui_Update(self, elapsed)
         if fluffy.rotation_ews > 0.1 and fluffy.ranged_base_speed > 0 then
             est_cast = fluffy.rotation_ews * 0.5 / fluffy.ranged_base_speed;
         end
-        autoshot_overdue = (next_start_check + est_cast * 1.2) < t;
+        -- Grace period after the predicted fire before declaring the shot
+        -- overdue.  A pure 0.2 * est_cast margin collapses to ~50 ms at high
+        -- haste — smaller than ordinary combat-log arrival jitter — which
+        -- made the bar freeze for a beat on perfectly normal cycles right
+        -- before the auto fired.  Keep an absolute floor so only genuinely
+        -- missing shots (dead target, out of range, deadzone) freeze the bar.
+        local grace = max(0.15, est_cast * 0.2);
+        autoshot_overdue = (next_start_check + est_cast + grace) < t;
     end
 
     if autoshot_overdue then

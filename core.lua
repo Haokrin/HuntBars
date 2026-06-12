@@ -51,6 +51,7 @@ local function print_help(msg)
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."baked_rotation|r' |c"..fluffy.msg_color_caution.."toggles|r rotation-aware mode (shows only next ability to cast for your speed)");
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."show_mode|r' |c"..fluffy.msg_color_caution.."toggles|r displaying the rotation mode label above the bar");
 	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."baked_melee|r' |c"..fluffy.msg_color_caution.."toggles|r including melee abilities in baked rotation recommendations");
+	print("'|c"..fluffy.msg_color_ok.."/fluffy|r |c"..fluffy.msg_color_info.."debug|r' |c"..fluffy.msg_color_caution.."toggles|r printing measured vs modeled auto shot timings after every shot");
 
 end
 
@@ -372,10 +373,12 @@ SlashCmdList["FLUFFY_BAR"] = function(msg)
 		FluffyDBPC["window_length"] = tonumber(args[1]);
 	elseif cmd == "latency" and nargs == 0 then
 		local ms = latency_to_ms(fluffy.latency);
+		local ms_rtt = latency_to_ms(fluffy.latency_rtt);
 		local _, _, home, world = GetNetStats();
 		print("|c"..fluffy.msg_color_ok.."Fluffy Hunter Bars|r [|c"..fluffy.msg_color_info.."Latency|r]");
 		print("  Home (RTT): " .. (home or "?") .. " ms  |  World (RTT): " .. (world or "?") .. " ms");
-		print("  One-way compensation offset applied: |c"..fluffy.msg_color_info.. ms .."|r ms  (clamped to 25-250 ms)");
+		print("  Window-start compensation (one-way): |c"..fluffy.msg_color_info.. ms .."|r ms  (clamped to 25-250 ms)");
+		print("  Safe-press deadline margin (RTT): |c"..fluffy.msg_color_info.. ms_rtt .."|r ms  (clamped to 50-400 ms)");
 		print("  Current rotation: |c"..fluffy.msg_color_info..fluffy.rotation_mode.."|r  (eWS: " .. string.format("%.2f", fluffy.rotation_ews) .. "s)");
 	elseif cmd == "baked_rotation" and nargs == 0 then
 		FluffyDBPC["baked_rotation"][1] = not FluffyDBPC["baked_rotation"][1];
@@ -389,6 +392,10 @@ SlashCmdList["FLUFFY_BAR"] = function(msg)
 		FluffyDBPC["baked_include_melee"][1] = not FluffyDBPC["baked_include_melee"][1];
 		local state = FluffyDBPC["baked_include_melee"][1] and "|c"..fluffy.msg_color_ok.."ON" or "|c"..fluffy.msg_color_caution.."OFF";
 		print("|c"..fluffy.msg_color_info.."Melee Weaving in Baked Rotation|r set to " .. state .. "|r (Raptor Strike / Melee Auto will be included in rotation recommendations)");
+	elseif cmd == "debug" and nargs == 0 then
+		fluffy.debug_output = not fluffy.debug_output;
+		local state = fluffy.debug_output and "|c"..fluffy.msg_color_ok.."ON" or "|c"..fluffy.msg_color_caution.."OFF";
+		print("|c"..fluffy.msg_color_info.."Timing Debug Output|r set to " .. state .. "|r (prints measured vs modeled auto shot timings on every shot)");
 	else
 		print_help(msg);
 	end
