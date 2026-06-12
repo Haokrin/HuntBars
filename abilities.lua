@@ -454,8 +454,10 @@ end
 fluffy.ability_multishot["cdb"] = function(t)
 	return 10;
 end
+-- Steady Shot occupies a fixed 1.5 s GCD; cdb is the lockout remaining
+-- AFTER the cast finishes, so cast + cdb always totals 1.5 s.
 fluffy.ability_steadyshot["cdb"] = function(t)
-	return 1.5 - 1.0 * get_haste_mod_ranged(t);
+	return 1.5 - 1.5 * get_haste_mod_ranged(t);
 end
 fluffy.ability_raptorstrike["cdb"] = function(t)
 	return 6.0;
@@ -481,8 +483,15 @@ end
 fluffy.ability_multishot["cast"] = function(t)
 	return 0.5 * get_haste_mod_ranged(t);
 end
+-- Steady Shot: 1.5 s BASE cast time, scaled by ranged haste.  This matches
+-- diziet559's rotationtools reference model (cast = 1.5 / (1 + haste)) and
+-- the original addon formula.  Do NOT "fix" the base to 1.0 s — that widens
+-- the recommended press window past the true safe deadline, and every press
+-- near the window end then clips (delays) the incoming auto shot.  The
+-- clipping is most visible at high haste, where the hard safety cap
+-- (auto_ts - cast - latency) is the binding constraint on the window.
 fluffy.ability_steadyshot["cast"] = function(t)
-	return 1.0 * get_haste_mod_ranged(t);
+	return 1.5 * get_haste_mod_ranged(t);
 end
 fluffy.ability_raptorstrike["cast"] = function(t)
 	if fluffy.client_version > 11307 then
@@ -672,6 +681,7 @@ local function update_spell_finished(spellID)
 		fluffy.ability_autoshot["fired"] = t;
 		fluffy.ability_autoshot["next_start"] = t + speed - fluffy.ability_autoshot["cast"](t);
 		fluffy.ability_autoshot["next_fired"] = t + speed;
+		fluffy.swing_speed_snapshot = speed;
 		last_fired_ability = fluffy.ability_aimedshot;
 
 		-- analyze_game_state(fluffy.future_window_lenght);
@@ -936,6 +946,7 @@ local function parse_combat_event(log_message)
 				fluffy.ability_autoshot["next_start"] = current_auto_start;
 				fluffy.ability_autoshot["next_fired"] = current_auto_start + init_cast;
 				fluffy.rotation_ews = init_speed;
+				fluffy.swing_speed_snapshot = init_speed;
 			end
 		elseif event == "SPELL_CAST_START" then
 			
@@ -946,6 +957,13 @@ local function parse_combat_event(log_message)
 			current_auto_finish = GetTime();
 			fluffy.is_casting_autoshot = false;
 			fluffy.is_casting = false;
+
+			-- Timing verification (enable via /fluffy debug): capture the
+			-- MEASURED aim duration and this fire's prediction error before
+			-- the cycle variables are overwritten below.
+			local measured_aim = current_auto_finish - current_auto_start;
+			local prev_fired = fluffy.ability_autoshot["fired"];
+			local predicted_fire = fluffy.ability_autoshot["next_fired"];
 
 			-- Use UnitRangedDamage() as the authoritative speed source.
 			-- This returns the game engine's actual current attack period
@@ -972,14 +990,28 @@ local function parse_combat_event(log_message)
 			fluffy.ability_autoshot["next_fired"] = next_auto_finish;
 			fluffy.logic_dirty = true;
 
-			-- Update rotation_ews to the authoritative API speed so the
-			-- haste compensation in analyze_game_state does NOT re-adjust
-			-- next_start a second time.  Using the same source (API speed)
-			-- in both places prevents the double-adjustment overshoot that
-			-- occurred when buff table and API disagreed.
+			-- Update rotation_ews AND swing_speed_snapshot to the same
+			-- authoritative API speed the next_start/next_fired prediction
+			-- was just computed with.  The mid-cycle haste rescale in
+			-- analyze_game_state compares the live speed against this
+			-- snapshot, so setting it here guarantees the freshly rebased
+			-- cycle is not immediately rescaled a second time.
 			fluffy.rotation_ews = curr_speed;
+			fluffy.swing_speed_snapshot = curr_speed;
 
-			print_debug("WPN SPEED: " .. string.format("%5.3f", fluffy.ranged_base_speed) .. " -> " .. string.format("%5.3f", curr_speed));
+			-- /fluffy debug: ground-truth check of the timing model.
+			--   aim      = SPELL_CAST_START -> SPELL_CAST_SUCCESS, vs modeled
+			--              0.5 * speed / base_speed (should match within a frame)
+			--   cycle    = fire-to-fire, vs eWS (matches when haste was stable)
+			--   pred err = actual fire vs predicted next_fired (+ = fired late;
+			--              should stay within ~±50 ms when nothing clipped)
+			if fluffy.debug_output and prev_fired > 0 and predicted_fire > 0 then
+				print_debug(string.format(
+					"AS fired | aim %.3fs (model %.3fs) | cycle %.3fs (eWS %.3f) | pred err %+d ms",
+					measured_aim, curr_cast,
+					current_auto_finish - prev_fired, curr_speed,
+					floor((current_auto_finish - predicted_fire) * 1000 + 0.5)));
+			end
 			
 		elseif event == "SPELL_CAST_SUCCESS" then
 

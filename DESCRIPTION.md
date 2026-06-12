@@ -39,7 +39,7 @@ Dynamically tracks all relevant haste effects and adjusts recommendations in rea
 - And more (Crowd Pummeler, Jackhammer, Hammer Haste)
 
 ### Latency Compensation
-Reads network latency (home/world) every 5 seconds and compensates auto shot timing so recommendations account for server-side cast registration delay. This prevents auto shot clipping on higher-ping connections (common on EU servers). Latency is clamped between 50ms and 500ms.
+Reads network latency (home/world) every 0.5 seconds (exponentially smoothed) and applies two compensation values: a one-way (RTT/2) offset for window starts, and a full-RTT margin on the safe-press deadline before each incoming auto shot (the press must reach the server AND the displayed timeline is event-arrival anchored, so both halves of the round trip apply). This prevents auto shot clipping on higher-ping connections. One-way is clamped to 25–250ms, RTT to 50–400ms.
 
 ### Gear and Talent Awareness
 - Scans equipped ranged weapon stats (damage, speed), ammo DPS, and quiver haste bonus.

@@ -98,17 +98,28 @@ fluffy.bar_len_seconds = 3.4;
 fluffy.movement_spark_interval = 0.5;
 
 -- ---------------------------------------------------------------------------
--- Latency compensation
--- GetNetStats() returns home/world ROUND-TRIP latency in ms. We convert to
--- one-way (RTT/2) since cast-clipping cares only about how long it takes the
--- server to register the start of our cast, cache every 0.5 s (with
--- exponential smoothing, alpha=0.3), and add it to cast_finishes so we
--- never recommend the next GCD before the server has fully registered the
--- current cast. Also applied as a hard cap on Steady Shot and Multi-Shot
--- window ends so casts with non-zero cast times cannot clip the autoshot on
--- high-ping connections. Clamped to [0.025, 0.25] seconds one-way.
+-- Latency compensation (two values, used for different purposes)
+--
+-- GetNetStats() returns home/world ROUND-TRIP latency in ms, refreshed every
+-- 0.5 s with exponential smoothing (alpha=0.3).
+--
+-- fluffy.latency (one-way, RTT/2, clamped [0.025, 0.25] s):
+--   Added to cast_finishes so we never recommend the next GCD before the
+--   server has registered the current cast.  Window STARTS being slightly
+--   late is harmless — the client's spell queue absorbs early presses.
+--
+-- fluffy.latency_rtt (full RTT, clamped [0.05, 0.4] s):
+--   Subtracted from the safe-press DEADLINE (window ends) before an incoming
+--   auto shot.  Full RTT is required here, not one-way: the addon's whole
+--   timeline is anchored to combat-log event ARRIVAL times (already one-way
+--   late relative to the server), and a keypress takes another one-way to
+--   reach the server.  press + (client->server) + cast must finish before
+--   the server-side aim start = displayed_aim_start - (server->client).
+--   Using only RTT/2 here makes every press at the shown window end clip
+--   the auto shot by the missing half.
 -- ---------------------------------------------------------------------------
 fluffy.latency            = 0.05;  -- seconds one-way, default until first measurement
+fluffy.latency_rtt        = 0.1;   -- seconds round-trip, default until first measurement
 fluffy.latency_last_check = 0;     -- GetTime() stamp of last GetNetStats() call
 fluffy.latency_color_threshold_green = 0.05;  -- 50 ms one-way (100 ms RTT)
 fluffy.latency_color_threshold_yellow = 0.1;  -- 100 ms one-way (200 ms RTT)
@@ -134,10 +145,23 @@ fluffy.rotation_ews  = 0;
 -- recalculation instead of waiting for the 20 fps throttle.
 fluffy.logic_dirty = false;
 
+-- Toggled by /fluffy debug.  When on, every auto shot prints measured vs
+-- modeled aim time, fire-to-fire cycle vs eWS, and the prediction error,
+-- so timing accuracy can be verified in-game.
+fluffy.debug_output = false;
+
 -- Smooth correction applied to spark positions when autoshot fires.
 -- Tracks the prediction error and decays over several frames to prevent
 -- the visual jump when transitioning from one auto shot cycle to the next.
 fluffy.spark_correction = 0;
+
+-- Effective weapon speed (UnitRangedDamage) that the current
+-- next_start/next_fired prediction was computed with.  When the live speed
+-- deviates from this snapshot mid-cycle (haste proc gained or expired), the
+-- game engine rescales the REMAINING swing time proportionally — and
+-- analyze_game_state mirrors that so the prediction stays accurate instead
+-- of going stale until the next fire event.
+fluffy.swing_speed_snapshot = 0;
 
 -- Tracks the last time an event caused a state change, so the OOC idle
 -- freeze can continue updating long enough for cooldowns to expire.

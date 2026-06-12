@@ -79,26 +79,24 @@ local function optimize_towards_autoshot()
                 if A == fluffy.ability_steadyshot then
                     -- Steady Shot: use DPS equilibrium as primary cap, but also apply
                     -- a hard safety cap based on cast time and latency. The equilibrium
-                    -- point maximizes single-target DPS against autoshot, but on high-ping
-                    -- connections (fluffy.latency > 0), the server may not register the
-                    -- cast start until latency seconds later. Without the hard cap, even
-                    -- the equilibrium-bounded cast could finish after the autoshot arrives.
+                    -- point maximizes single-target DPS against autoshot; the hard cap
+                    -- guarantees the cast can still finish before the server-side aim
+                    -- start.  Full RTT is required (press -> server one-way, plus the
+                    -- displayed timeline being event-arrival anchored, i.e. another
+                    -- one-way late).  With only RTT/2 every press at the shown window
+                    -- end clips the auto shot by the missing half.
                     local cast_time = A["cast"](auto_ts);
                     f = min(f, get_point_of_equilibrium_autoshot(A, auto_ts, auto_te));
-                    f = min(f, auto_ts - cast_time - fluffy.latency);
+                    f = min(f, auto_ts - cast_time - fluffy.latency_rtt);
                 else
                     -- Multi/Arcane also have a cast time. Pulling the window
                     -- end back by cast(t) ensures we never suggest firing them
                     -- when the cast itself would overlap the incoming autoshot.
-                    -- We also subtract the measured network latency so that
-                    -- by the time the server receives and starts the cast, the
-                    -- full cast duration still finishes before the auto shot.
-                    -- Without this, the bar shows multi-shot as safe to cast
-                    -- when it would actually clip the auto on higher-latency
-                    -- connections.
+                    -- The same full-RTT margin as Steady Shot applies so the
+                    -- cast finishes server-side before the aim begins.
                     local cast_time = A["cast"](auto_ts);
                     if cast_time > 0 then
-                        f = auto_ts - cast_time - fluffy.latency;
+                        f = auto_ts - cast_time - fluffy.latency_rtt;
                     end
                 end
 
@@ -291,7 +289,7 @@ local function optimize_intervals_simple()
                             -- otherwise lower-priority abilities (Arcane) get erased
                             -- entirely when B's next window is far in the future.
                             local b_cast_time = B["cast"](ts_B);
-                            local clip_target = ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B) - b_cast_time - fluffy.latency;
+                            local clip_target = ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B) - b_cast_time - fluffy.latency_rtt;
                             if clip_target > ts_A then
                                 te_A = min(te_A, clip_target);
                             end
@@ -409,13 +407,20 @@ end
 -- Latency helper
 -- ---------------------------------------------------------------------------
 -- Reads GetNetStats() at most once every 0.5 seconds. The function returns
--- bandwidthIn, bandwidthOut, latencyHome, latencyWorld in milliseconds.
--- GetNetStats() reports ROUND-TRIP time; for cast-clipping we only care about
--- one-way client-to-server delay (how long until the server registers our
--- cast start), so we divide by 2. Using full RTT double-counts the delay and
--- eats the entire steady window at 1:1 haste levels.
--- Clamped to a sensible [25 ms, 250 ms] one-way window. An exponential moving
--- average (alpha=0.3) smooths out transient spikes.
+-- bandwidthIn, bandwidthOut, latencyHome, latencyWorld in milliseconds
+-- (ROUND-TRIP).  Two smoothed values are maintained:
+--
+--   fluffy.latency     = one-way (RTT/2), used where being LATE is safe
+--                        (window starts via cast_finishes; spell queue
+--                        absorbs slightly-early presses anyway).
+--   fluffy.latency_rtt = full RTT, used for the safe-press DEADLINE before
+--                        an incoming auto shot.  The addon's timeline is
+--                        anchored to combat-log arrival (one-way late) and
+--                        the press needs one-way to reach the server, so
+--                        both halves of the round trip apply.  See the
+--                        comment block in preamble.variables.lua.
+--
+-- An exponential moving average (alpha=0.3) smooths out transient spikes.
 local function refresh_latency()
     local t = GetTime();
     if t - fluffy.latency_last_check < 0.5 then return end
@@ -423,11 +428,10 @@ local function refresh_latency()
     local _, _, home, world = GetNetStats();
     if home and world then
         local ms = max(home or 0, world or 0);
-        local new_latency = max(0.025, min(0.25, ms * 0.0005));
-        -- Exponential moving average (alpha=0.3) so a single ping spike does
-        -- not instantly shift all ability windows; sustained changes still
-        -- propagate within a few seconds.
-        fluffy.latency = fluffy.latency * 0.7 + new_latency * 0.3;
+        local new_one_way = max(0.025, min(0.25, ms * 0.0005));
+        local new_rtt     = max(0.05,  min(0.4,  ms * 0.001));
+        fluffy.latency     = fluffy.latency     * 0.7 + new_one_way * 0.3;
+        fluffy.latency_rtt = fluffy.latency_rtt * 0.7 + new_rtt     * 0.3;
     end
 end
 
@@ -472,6 +476,23 @@ local abilities_to_consider = {};
 --     -- end
 --     return false;
 -- end
+-- A cast or channel in progress blocks the pending auto shot: the server
+-- will not begin the 0.5s aim until the cast completes.  When the cast is
+-- going to end after the predicted aim start, fold that pushback into
+-- next_start/next_fired immediately (idempotent — once next_start equals
+-- the cast end the condition is false).  This keeps the spark, the
+-- ability windows, AND the overdue-freeze check all consistent with what
+-- the server has already decided, so a genuinely clipped auto shot is
+-- drawn as a pushed-back spark instead of freezing the whole bar.
+local function push_autoshot_to_cast_end(cast_end)
+    local ns = fluffy.ability_autoshot["next_start"];
+    if ns > 0 and cast_end > ns then
+        fluffy.ability_autoshot["next_fired"] =
+            fluffy.ability_autoshot["next_fired"] + (cast_end - ns);
+        fluffy.ability_autoshot["next_start"] = cast_end;
+    end
+end
+
 local last_time_moved = 0;
 function analyze_game_state(window_len, t)
 
@@ -507,7 +528,7 @@ function analyze_game_state(window_len, t)
 	end    
     update_player_stats();
 
-    -- Refresh cached latency reading (throttled to once per 5 s)
+    -- Refresh cached latency reading (throttled to once per 0.5 s)
     refresh_latency();
 
     -- Derive current effective weapon speed and rotation mode label.
@@ -527,16 +548,35 @@ function analyze_game_state(window_len, t)
             new_ews = fluffy.ability_autoshot["cdb"](t) + fluffy.ability_autoshot["cast"](t);
         end
 
-        -- Do NOT rescale next_start mid-swing when haste changes.
-        -- The old code adjusted next_start proportionally every frame,
-        -- which caused visible spark jumps the instant a haste buff was
-        -- gained or lost.  Instead, let next_start stay where the last
-        -- SPELL_CAST_SUCCESS set it.  When the auto fires at a slightly
-        -- different time (the game engine does adjust mid-swing), the
-        -- SPELL_CAST_SUCCESS handler will set the authoritative next
-        -- cycle, and spark_correction will smooth the small transition.
-        -- This matches WeaponSwingTimer's approach: speed is only
-        -- applied on fire events, never mid-swing.
+        -- MID-CYCLE HASTE RESCALE.  When ranged attack speed changes between
+        -- frames (Quick Shots / Rapid Fire / trinket proc gained or expired),
+        -- the game engine rescales the REMAINING swing time proportionally:
+        --   remaining_new = remaining_old * new_speed / old_speed.
+        -- Mirror exactly that, anchored at now.  An earlier implementation
+        -- re-anchored the FULL period from the last fire (fired + new_speed),
+        -- which over-corrects by applying the new speed to the already
+        -- elapsed portion too — those oversized jumps are why rescaling was
+        -- once removed.  Scaling only the remaining time is small (e.g. a
+        -- 15% Quick Shots expiry 80% through the cycle moves the spark by
+        -- ~0.07 s, not ~0.35 s) and spark_correction glides it smoothly.
+        -- Without this, the prediction goes stale whenever a haste buff
+        -- drops mid-cycle: the bar reaches the predicted fire point early,
+        -- the overdue-freeze engages, and the bar visibly stalls right
+        -- before the auto fires — looking exactly like a clipped shot.
+        local prev_ews = fluffy.swing_speed_snapshot;
+        if prev_ews > 0.1 and new_ews > 0.1
+                and math.abs(new_ews - prev_ews) > 0.005
+                and not fluffy.is_casting_autoshot
+                and fluffy.ability_autoshot["next_fired"] > t then
+            local ratio = new_ews / prev_ews;
+            local ns = fluffy.ability_autoshot["next_start"];
+            if ns > t then
+                fluffy.ability_autoshot["next_start"] = t + (ns - t) * ratio;
+            end
+            fluffy.ability_autoshot["next_fired"] =
+                t + (fluffy.ability_autoshot["next_fired"] - t) * ratio;
+        end
+        fluffy.swing_speed_snapshot = new_ews;
 
         fluffy.rotation_ews  = new_ews;
         fluffy.rotation_mode = derive_rotation_mode(new_ews);
@@ -561,10 +601,12 @@ function analyze_game_state(window_len, t)
         -- on connections with >~80 ms ping the bar lights up slightly too
         -- early and causes the next cast to clip the outgoing auto shot.
         fluffy.cast_finishes = max(fluffy.cast_finishes, endTime * 0.001 + fluffy.latency);
+        push_autoshot_to_cast_end(endTime * 0.001);
     else
         local spellC, _, _, _, endTimeC = UnitChannelInfo("player");
         if spellC then
             fluffy.cast_finishes = max(fluffy.cast_finishes, endTimeC * 0.001 + fluffy.latency);
+            push_autoshot_to_cast_end(endTimeC * 0.001);
         end
     end
 
