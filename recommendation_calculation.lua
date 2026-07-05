@@ -678,6 +678,25 @@ function analyze_game_state(window_len, t)
     show_multi  = (fluffy.ability_multishot["known"]  and not low_mana_multi and FluffyDBPC["consider_multi"][1]);
     show_arcane = (fluffy.ability_arcaneshot["known"] and not low_mana_arcane and FluffyDBPC["consider_arcane"][1]);
 
+    -- Multi-ready timestamp for the renderer: per diziet559's rotation tools,
+    -- basic rotations "should use multi shot instead of a steady shot
+    -- whenever it is off CD", so steady windows that Multi can claim are
+    -- recolored as Multi.  Built from the addon-tracked fire time + fixed
+    -- 10 s cooldown so the value is stable across the GCD (GetSpellCooldown
+    -- reports the GCD too, and the steady window start already accounts for
+    -- it).  The API cooldown is still honored when it exceeds any possible
+    -- GCD, e.g. after a /reload mid-cooldown when the fire time is lost.
+    if show_multi then
+        local ready = max(t, fluffy.ability_multishot["fired"] + fluffy.ability_multishot["cdb"](t));
+        local api_cd = fluffy.ability_multishot["cd"](t);
+        if api_cd > 1.6 then
+            ready = max(ready, t + api_cd);
+        end
+        fluffy.multi_ready_at = ready;
+    else
+        fluffy.multi_ready_at = math.huge;
+    end
+
     if show_arcane then
         table.insert(abilities_to_consider, fluffy.ability_arcaneshot);
     end

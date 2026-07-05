@@ -145,6 +145,12 @@ fluffy.rotation_ews  = 0;
 -- recalculation instead of waiting for the 20 fps throttle.
 fluffy.logic_dirty = false;
 
+-- Absolute time at which Multi-Shot is (or becomes) ready; math.huge while
+-- Multi is unknown, disabled, or out of mana.  Set by analyze_game_state.
+-- The renderer recolors Steady windows that Multi can claim: the steady
+-- slot doubles as the Multi-Shot slot when Multi is off cooldown.
+fluffy.multi_ready_at = math.huge;
+
 -- Toggled by /fluffy debug.  When on, every auto shot prints measured vs
 -- modeled aim time, fire-to-fire cycle vs eWS, and the prediction error,
 -- so timing accuracy can be verified in-game.

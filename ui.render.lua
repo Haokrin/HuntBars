@@ -87,6 +87,24 @@ local function update_bars(ability, left_shift_px, shift_y, fluffyBar_len, fluff
 
                 local bar = ability["bars"][bar_idx];
 
+                -- The steady slot doubles as the Multi-Shot slot: per
+                -- diziet559's rotation tools, a Multi-Shot should replace the
+                -- Steady whenever it is off cooldown, and Multi's shorter cast
+                -- always fits inside a steady window.  Recolor the window to
+                -- Multi's color (and icon) when Multi-Shot will be ready by
+                -- the earliest press time of this window; it snaps back to
+                -- Steady's color the moment the Multi-Shot is spent.
+                if ability == fluffy.ability_steadyshot then
+                    local press_at = max(Ws[i], t);
+                    local as_multi = (fluffy.multi_ready_at or math.huge) <= press_at + 0.005;
+                    if bar.shows_multi ~= as_multi then
+                        bar.shows_multi = as_multi;
+                        local C = as_multi and FluffyDBPC["color_multi"] or FluffyDBPC["color_steady"];
+                        bar.texture:SetColorTexture(C[1]/255, C[2]/255, C[3]/255, C[4]);
+                        bar.icon:SetTexture(as_multi and fluffy.icon_path_multi or fluffy.icon_path_steady, "CLAMPTOBLACKADDITIVE");
+                    end
+                end
+
                 if px_width > bar_min_width then
                     bar:SetWidth(px_width);
                     bar:ClearAllPoints();

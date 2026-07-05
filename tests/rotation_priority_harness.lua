@@ -56,7 +56,12 @@ function UnitHealth() return 100; end
 function UnitHealthMax() return 100; end
 function IsUsableSpell() return true, false; end
 function IsSpellKnown() return false; end
-function GetSpellCooldown() return 0, 0, 1; end
+local spell_cooldowns = {};  -- [spell_id] = {start, duration}
+function GetSpellCooldown(id)
+    local cd = spell_cooldowns[id];
+    if cd then return cd[1], cd[2], 1; end
+    return 0, 0, 1;
+end
 function GetSpellBonusDamage() return 0; end
 function GetRangedCritChance() return 10; end
 function GetCritChance() return 10; end
@@ -240,6 +245,34 @@ for ews10 = 9, 30 do          -- eWS 0.9 .. 3.0
 end
 assert(sweep_steady_windows > sweep_checks, "sweep produced too few steady windows to be meaningful");
 print(string.format("INFO  sweep: %d states checked, %d steady windows seen", sweep_checks, sweep_steady_windows));
+
+-- =====================================================================
+-- Scenario D: multi_ready_at, the timestamp driving the steady-slot
+-- recolor ("use multi shot instead of a steady shot whenever it is off
+-- CD").  Must ignore the GCD (the steady window start already accounts
+-- for it) but honor the tracked fire time and any real API cooldown.
+-- =====================================================================
+setup_cycle_state(3.0, 0.1, 5000);
+now = 5000;
+fluffy.ability_multishot["fired"] = 0;
+analyze_game_state(3, now);
+check("D: multi never fired -> ready now", fluffy.multi_ready_at, now, 1e-6);
+
+fluffy.ability_multishot["fired"] = now - 3;
+analyze_game_state(3, now);
+check("D: multi fired 3s ago -> ready in 7 (10s cd)", fluffy.multi_ready_at, now + 7, 1e-6);
+
+fluffy.ability_multishot["fired"] = 0;
+spell_cooldowns[fluffy.spell_id_multi] = {now - 4, 10};
+analyze_game_state(3, now);
+check("D: API cooldown (no tracked fire) -> ready in 6", fluffy.multi_ready_at, now + 6, 1e-6);
+spell_cooldowns[fluffy.spell_id_multi] = nil;
+
+FluffyDBPC["consider_multi"][1] = false;
+analyze_game_state(3, now);
+assert(fluffy.multi_ready_at == math.huge, "multi disabled must yield math.huge");
+print(string.format("PASS  %-58s %s", "D: multi disabled -> never recolors", "inf"));
+FluffyDBPC["consider_multi"][1] = true;
 
 -- ---------------------------------------------------------------------------
 print("");
