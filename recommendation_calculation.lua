@@ -30,17 +30,13 @@ local function get_point_of_equilibrium_autoshot(A, ats, ate)
     return (ate * dps_A - (cast_A - ats) * dps_auto)/(dps_auto + dps_A);
 end
 
-local function get_point_of_equilibrium_abilities(dmg_1, dmg_2)
-
-    local alpha = 1.4;
-
-    return 1.5 * (alpha * dmg_2 - dmg_1)/(alpha * dmg_2 + dmg_1);
-
-end
-
 -- local function get_point_of_equilibrium(A_dmg, B_dmg, A_cast, B_cast)
 --     return (A_dmg*(B_cast)-fluffy.recommendation_tolerance*B_dmg*(A_cast))/(fluffy.recommendation_tolerance*B_dmg + A_dmg);
 -- end
+
+-- Steady/Multi/Arcane all trigger the standard 1.5 s global cooldown
+-- (the ranged GCD is not reduced by haste in TBC).
+local gcd_lockout = 1.5;
 
 local intervals_autoshot_starts  = {};
 local intervals_autoshot_ends    = {};
@@ -189,9 +185,6 @@ end
 local ability_priority_indices = {};
 local ability_priority_abilities = {};
 local ability_priority_dmg = {};
-local function sort_ability_priority(a, b)
-    return ability_priority_dmg[a] > ability_priority_dmg[b];
-end
 
 -- Rotation-aware priority: Steady > Multi > Arcane.
 -- Per diziet559's rotation tools: "Only cast steady immediately following
@@ -253,22 +246,28 @@ local function optimize_intervals_simple()
     end
 
     -- clipping of interval ends
-    -- table.sort(ability_priority_indices, sort_ability_priority);
-    -- table.sort(ability_priority_indices, sort_ability_priority_2);
-
-    for i_tmp=1,#ability_priority_indices do 
+    -- GCD reservation: firing a lower-priority ability (Multi/Arcane) starts
+    -- the 1.5 s global cooldown, which delays the next press of every higher-
+    -- priority ability (Steady).  A press at time x is only safe when the GCD
+    -- it triggers still lets B's next window be used before ITS deadline:
+    --     x + gcd_lockout <= end of B's next window.
+    -- Anchoring to the window END matters: the end already encodes B's cast
+    -- time and latency against the incoming auto shot, so a press may delay B
+    -- within its window (harmless) but can never push B past the deadline.
+    -- No "keep the window alive" guard here: when no press time satisfies the
+    -- condition, the correct recommendation IS an empty window — e.g. Arcane
+    -- in a 1:1 rotation, where every Arcane press costs a Steady Shot.
+    for i_tmp=1,#ability_priority_indices do
         local i = ability_priority_indices[i_tmp];
 
         local B = ability_priority_abilities[i];
-        local dmg_B = ability_priority_dmg[i];
         local ints_B_s = intervals_abilities_starts[B];
         local ints_B_e = intervals_abilities_ends[B];
 
-        for j_tmp=i_tmp+1,#ability_priority_indices do 
+        for j_tmp=i_tmp+1,#ability_priority_indices do
             local j = ability_priority_indices[j_tmp];
 
             local A = ability_priority_abilities[j];
-            local dmg_A = ability_priority_dmg[j];
             local ints_A_s = intervals_abilities_starts[A];
             local ints_A_e = intervals_abilities_ends[A];
 
@@ -278,24 +277,21 @@ local function optimize_intervals_simple()
                 local te_A = ints_A_e[k];
 
                 if ts_A < te_A then
+                    -- B's windows are disjoint from this piece (set_minus above),
+                    -- so eligibility against the ORIGINAL piece end selects
+                    -- exactly the B windows that follow the piece.  Comparing
+                    -- against the shrinking te_A instead would cascade the clip
+                    -- through B windows that lie before the piece.
+                    local te_A_in = te_A;
                     for l=1,#ints_B_s do
                         local ts_B = ints_B_s[l];
                         local te_B = ints_B_e[l];
 
-                        if (ts_B < te_B) and (ts_B >= te_A) then
-                            -- Reserve cast time + latency for B (priority ability) so A
-                            -- does not squeeze in and push B out at high haste.
-                            -- Only clip when the result leaves A's window non-empty;
-                            -- otherwise lower-priority abilities (Arcane) get erased
-                            -- entirely when B's next window is far in the future.
-                            local b_cast_time = B["cast"](ts_B);
-                            local clip_target = ts_B - get_point_of_equilibrium_abilities(dmg_A, dmg_B) - b_cast_time - fluffy.latency_rtt;
-                            if clip_target > ts_A then
-                                te_A = min(te_A, clip_target);
-                            end
+                        if (ts_B < te_B) and (ts_B >= te_A_in) then
+                            te_A = min(te_A, te_B - gcd_lockout);
                         end
                     end
-    
+
                     ints_A_e[k] = te_A;
                 end
             end

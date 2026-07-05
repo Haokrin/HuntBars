@@ -1,0 +1,251 @@
+-- ---------------------------------------------------------------------------
+-- Offline rotation-priority verification harness for Fluffy Hunter Bars.
+--
+--   Run from the repository root with plain Lua 5.1 (same version as WoW):
+--     lua5.1 tests/rotation_priority_harness.lua
+--
+-- Verifies the Steady > Multi > Arcane window priority against the model on
+-- diziet559.github.io/rotationtools ("only cast steady immediately following
+-- an auto; cast multi/arcane tastefully where you cannot fit a steady"):
+--
+--   1. Multi/Arcane windows never overlap Steady windows (Arcane must only
+--      appear where a Steady cannot be fired).
+--   2. GCD safety: a press at ANY point of a shown Multi/Arcane window,
+--      plus the 1.5 s global cooldown it triggers, still lets the next
+--      Steady window be used before its deadline.  Without this, the bars
+--      recommend Arcane presses that silently cost a Steady Shot.
+--   3. French rotation (eWS 3.0): Steady, then Multi, then Arcane windows
+--      tile the gap at the expected boundaries.
+--   4. 1:1 rotation (eWS 1.5): Multi/Arcane windows are EMPTY — every gap
+--      belongs to Steady and any instant press there would cost a Steady.
+-- ---------------------------------------------------------------------------
+
+-- ------------------------------------------------------------------ WoW API
+local now = 0;                  -- simulated client clock
+local api_ranged_speed = 3.0;   -- UnitRangedDamage("player") return
+local casting_info = nil;       -- {name, endTime_ms}
+local frames = {};              -- frames created by the addon
+
+min, max, floor = math.min, math.max, math.floor;
+function wipe(t) for k in pairs(t) do t[k] = nil; end return t; end
+function GetTime() return now; end
+function CreateFrame() local f = {};
+    f.RegisterEvent = function() end;
+    f.SetScript = function(self, kind, fn) self[kind] = fn; end;
+    table.insert(frames, f); return f;
+end
+CR_HASTE_RANGED, CR_HASTE_MELEE = 20, 18;
+local haste_rating_ranged = 0;
+function GetCombatRating(i) return (i == CR_HASTE_RANGED) and haste_rating_ranged or 0; end
+function UnitLevel() return 70; end
+function UnitClass() return "Hunter", "HUNTER", 3; end
+function UnitGUID() return "guid-player"; end
+function UnitRangedDamage() return api_ranged_speed, 100, 200, 0, 0, 0; end
+function UnitAttackSpeed() return 2.0, nil; end
+function UnitRangedAttackPower() return 1000, 0, 0; end
+function UnitAttackPower() return 500, 0, 0; end
+function UnitBuff() return nil; end
+function UnitDebuff() return nil; end
+function UnitCastingInfo()
+    if casting_info then return casting_info[1], "", "", 0, casting_info[2]; end
+    return nil;
+end
+function UnitChannelInfo() return nil; end
+function UnitAffectingCombat() return true; end
+function UnitHealth() return 100; end
+function UnitHealthMax() return 100; end
+function IsUsableSpell() return true, false; end
+function IsSpellKnown() return false; end
+function GetSpellCooldown() return 0, 0, 1; end
+function GetSpellBonusDamage() return 0; end
+function GetRangedCritChance() return 10; end
+function GetCritChance() return 10; end
+function GetHitModifier() return 0; end
+function GetNetStats() return 0, 0, 60, 80; end
+function GetInventoryItemID() return nil; end
+function GetBuildInfo() return "2.5.4", "0", "0", 20504; end
+
+local combat_log_payload = nil;
+-- explicit bounds: the payload contains embedded nils, and unpack(t) would
+-- otherwise stop at the first hole
+function CombatLogGetCurrentEventInfo() return unpack(combat_log_payload, 1, 21); end
+
+-- ----------------------------------------------------------- load the addon
+local fluffy = {};
+local function load_addon_file(path)
+    local fn = assert(loadfile(path));
+    fn("FluffyHunterBars", fluffy);
+end
+load_addon_file("preamble.debug.lua");
+load_addon_file("preamble.variables.lua");
+load_addon_file("preamble.auxiliary.lua");
+load_addon_file("player.stats.lua");
+load_addon_file("abilities.lua");
+load_addon_file("recommendation_calculation.lua");
+
+-- minimal post-load state normally set by ADDON_LOADED / handlers
+fluffy.is_player_hunter = true;
+fluffy.player_id = "guid-player";
+fluffy.client_version = 20504;
+fluffy.ranged_base_speed = 3.0;
+fluffy.ranged_weapon_id = 42;
+fluffy.ranged_dmg_avg = 250;
+fluffy.ability_steadyshot["known"] = true;
+fluffy.ability_multishot["known"] = true;
+fluffy.ability_arcaneshot["known"] = true;
+-- max-rank flat bonuses, normally assigned by update_spell_data()
+fluffy.ability_steadyshot["flat_bonus"] = 150;
+fluffy.ability_multishot["flat_bonus"]  = 205;
+fluffy.ability_arcaneshot["flat_bonus"] = 273;
+InitDB();
+
+-- pin latency to known values for deterministic assertions
+local ONE_WAY, RTT = 0.04, 0.08;
+fluffy.latency = ONE_WAY;
+fluffy.latency_rtt = RTT;
+fluffy.latency_last_check = math.huge;
+
+local GCD = 1.5;
+
+local failures = 0;
+local function check(label, got, want, tolerance)
+    tolerance = tolerance or 1e-9;
+    if math.abs(got - want) <= tolerance then
+        print(string.format("PASS  %-58s %.4f", label, got));
+    else
+        failures = failures + 1;
+        print(string.format("FAIL  %-58s got %.4f, want %.4f", label, got, want));
+    end
+end
+
+-- Sets up a clean mid-cycle auto shot state: last shot fired `frac` of a
+-- cycle ago, prediction consistent with `ews`, nothing casting.
+local function setup_cycle_state(ews, frac, t)
+    local mod = ews / fluffy.ranged_base_speed;
+    api_ranged_speed = ews;
+    -- rating such that the buff-table haste mod equals the API speed
+    haste_rating_ranged = (1 / mod - 1) * 1577;
+    local aim = 0.5 * mod;
+    local fired = t - frac * ews;
+    fluffy.ability_autoshot["fired"] = fired;
+    fluffy.ability_autoshot["next_fired"] = fired + ews;
+    fluffy.ability_autoshot["next_start"] = fired + ews - aim;
+    fluffy.swing_speed_snapshot = ews;
+    fluffy.rotation_ews = ews;
+    fluffy.is_casting_autoshot = false;
+    fluffy.cast_finishes = 0;
+    fluffy.autoshot_delay = 0;
+    casting_info = nil;
+end
+
+-- Property checks shared by all scenarios.  Returns the number of steady
+-- windows so callers can assert the checks were not vacuous.
+local function check_priority_properties(label, t)
+    local sWs, sWe = fluffy.ability_steadyshot["windows_s"], fluffy.ability_steadyshot["windows_e"];
+    local horizon = t + 3.4;  -- visible bar range
+
+    for _, low in ipairs({fluffy.ability_multishot, fluffy.ability_arcaneshot}) do
+        local lWs, lWe = low["windows_s"], low["windows_e"];
+        for i = 1, #lWs do
+            -- (1) no overlap with any steady window
+            for j = 1, #sWs do
+                local lo = math.max(lWs[i], sWs[j]);
+                local hi = math.min(lWe[i], sWe[j]);
+                if hi - lo > 0.005 then
+                    failures = failures + 1;
+                    print(string.format("FAIL  %s: %s window [%.3f..%.3f] overlaps steady [%.3f..%.3f]",
+                        label, low["name"], lWs[i], lWe[i], sWs[j], sWe[j]));
+                end
+            end
+            -- (2) GCD safety at the worst press time (window end)
+            local x = math.min(lWe[i], horizon);
+            if x >= lWs[i] then
+                for j = 1, #sWs do
+                    if sWe[j] > x then
+                        if x + GCD > sWe[j] + 1e-6 then
+                            failures = failures + 1;
+                            print(string.format(
+                                "FAIL  %s: %s press at %.3f + GCD ends %.3f, past steady deadline %.3f",
+                                label, low["name"], x, x + GCD, sWe[j]));
+                        end
+                        break;
+                    end
+                end
+            end
+        end
+    end
+    return #sWs;
+end
+
+-- =====================================================================
+-- Scenario A: eWS 3.0 (French rotation), fresh auto fire.
+-- Fire at 10.5 (aim 10.0..10.5), evaluated at t = 10.6.
+-- Expected first-gap tiling (aim start of next auto = 13.0):
+--   steady [10.6 .. 11.42]   (13.0 - 1.5 cast - 0.08 RTT)
+--   multi  [11.42 .. 12.42]  (13.0 - 0.5 cast - 0.08 RTT)
+--   arcane [12.42 .. 12.92]  (next steady deadline 14.42 - 1.5 GCD)
+-- =====================================================================
+now = 10.0;  combat_log_payload = {now, "SPELL_CAST_START", nil, "guid-player",
+    nil, nil, nil, nil, nil, nil, nil, 75, "Auto Shot", nil};
+for _, f in ipairs(frames) do if f.OnEvent then f.OnEvent(f, "COMBAT_LOG_EVENT_UNFILTERED"); end end
+now = 10.5;  combat_log_payload[1] = now; combat_log_payload[2] = "SPELL_CAST_SUCCESS";
+for _, f in ipairs(frames) do if f.OnEvent then f.OnEvent(f, "COMBAT_LOG_EVENT_UNFILTERED"); end end
+
+now = 10.6;
+analyze_game_state(3, now);
+
+local sWe = fluffy.ability_steadyshot["windows_e"];
+local mWs, mWe = fluffy.ability_multishot["windows_s"], fluffy.ability_multishot["windows_e"];
+local aWs, aWe = fluffy.ability_arcaneshot["windows_s"], fluffy.ability_arcaneshot["windows_e"];
+
+check("A: steady deadline = aim - cast - RTT",        sWe[1], 11.42, 1e-6);
+check("A: multi opens at steady deadline",            mWs[1], 11.42, 1e-6);
+check("A: multi deadline = aim - cast - RTT",         mWe[1], 12.42, 1e-6);
+check("A: arcane opens at multi deadline",            aWs[1], 12.42, 1e-6);
+check("A: arcane deadline = next steady deadline - GCD", aWe[1], sWe[2] - GCD, 1e-6);
+check_priority_properties("A", now);
+
+-- =====================================================================
+-- Scenario B: eWS 1.5 (1:1 rotation), fresh auto fire.
+-- No Multi/Arcane window may appear: every inter-shot gap is a Steady
+-- gap, and any instant pressed there delays the next Steady past its
+-- deadline (this was the reported "arcane covers steady" bug).
+-- =====================================================================
+setup_cycle_state(1.5, 0.05, 20.3);
+now = 20.3;
+analyze_game_state(3, now);
+
+check("B: 1:1 rotation shows no multi windows",  #fluffy.ability_multishot["windows_s"], 0);
+check("B: 1:1 rotation shows no arcane windows", #fluffy.ability_arcaneshot["windows_s"], 0);
+assert(#fluffy.ability_steadyshot["windows_s"] >= 2, "expected steady windows at 1:1");
+check_priority_properties("B", now);
+
+-- =====================================================================
+-- Scenario C: sweep effective speed and cycle position; the overlap and
+-- GCD-safety properties must hold everywhere.
+-- =====================================================================
+local sweep_checks, sweep_steady_windows = 0, 0;
+for ews10 = 9, 30 do          -- eWS 0.9 .. 3.0
+    for _, frac in ipairs({0.1, 0.5, 0.9}) do
+        local ews = ews10 / 10;
+        local t = 100 + ews10 * 40 + frac * 10;
+        setup_cycle_state(ews, frac, t);
+        now = t;
+        analyze_game_state(3, t);
+        local before = failures;
+        sweep_steady_windows = sweep_steady_windows +
+            check_priority_properties(string.format("C ews=%.1f frac=%.1f", ews, frac), t);
+        sweep_checks = sweep_checks + 1;
+    end
+end
+assert(sweep_steady_windows > sweep_checks, "sweep produced too few steady windows to be meaningful");
+print(string.format("INFO  sweep: %d states checked, %d steady windows seen", sweep_checks, sweep_steady_windows));
+
+-- ---------------------------------------------------------------------------
+print("");
+if failures == 0 then
+    print("ALL ROTATION PRIORITY CHECKS PASSED");
+else
+    print(failures .. " ROTATION PRIORITY CHECK(S) FAILED");
+    os.exit(1);
+end

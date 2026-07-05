@@ -11,8 +11,8 @@ The addon continuously analyzes the player's current game state — including au
 
 - **Auto Shot** (red) — Tracks your ranged auto shot swing timer and displays upcoming auto shot fire times as spark indicators on the bar.
 - **Steady Shot** (orange) — Shows when to weave Steady Shot between auto shots without clipping.
-- **Multi-Shot** (blue) — Indicates optimal Multi-Shot windows, prioritized above Steady Shot.
-- **Arcane Shot** (purple) — Indicates optimal Arcane Shot windows, also prioritized above Steady Shot.
+- **Multi-Shot** (blue) — Shows windows where a Multi-Shot fits *around* the Steady Shot weave: its cast finishes before the incoming auto shot and its global cooldown cannot push the next Steady Shot past its deadline.
+- **Arcane Shot** (purple) — Shows windows where neither a Steady Shot nor a Multi-Shot fits; only appears when firing it cannot cost a Steady Shot (per the Rotation Tools guidance to cast Multi/Arcane only where a Steady cannot fit).
 - **Raptor Strike** (green) — Shows Raptor Strike availability when in melee range.
 - **Melee Auto Attack** (grey) — Tracks melee swing timer when a melee weapon is equipped.
 
