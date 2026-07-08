@@ -239,15 +239,22 @@ local function optimize_intervals_simple()
     -- clipping of interval ends
     -- GCD reservation: firing a lower-priority ability (Multi/Arcane) starts
     -- the 1.5 s global cooldown, which delays the next press of every higher-
-    -- priority ability (Steady).  A press at time x is only safe when the GCD
-    -- it triggers still lets B's next window be used before ITS deadline:
-    --     x + gcd_lockout <= end of B's next window.
-    -- Anchoring to the window END matters: the end already encodes B's cast
-    -- time and latency against the incoming auto shot, so a press may delay B
-    -- within its window (harmless) but can never push B past the deadline.
-    -- No "keep the window alive" guard here: when no press time satisfies the
-    -- condition, the correct recommendation IS an empty window — e.g. Arcane
-    -- in a 1:1 rotation, where every Arcane press costs a Steady Shot.
+    -- priority ability (Steady).  A press at time x is allowed when the GCD
+    -- it triggers lets B's next window be used no later than its deadline
+    -- plus the per-gap GCD slack:
+    --     x + gcd_lockout <= end of B's next window + gcd_slack.
+    -- gcd_slack = eWS - 1.5 is the idle GCD time per auto shot gap.  The
+    -- French rotation on rotationtools "slightly delays the auto shots to
+    -- fit additional shots in": a spillover of up to one gap's slack only
+    -- postpones the next Steady into its own gap, and the micro auto delay
+    -- that follows (the reference diagrams draw 0.1-0.4 s of "autodelay")
+    -- is worth far less than the extra Arcane/Multi hit.  Without this
+    -- allowance the Arcane window is empty at every eWS below ~2.25 s —
+    -- i.e. for the whole BM French band — even though the 5:5:1:1 cycle
+    -- includes an Arcane.  At 1:1 speeds the slack is zero and the strict
+    -- rule remains: every Arcane press there would cost a Steady Shot, so
+    -- the correct recommendation IS an empty window.
+    local gcd_slack = max(0, (fluffy.rotation_ews or 0) - gcd_lockout);
     for i_tmp=1,#ability_priority_indices do
         local i = ability_priority_indices[i_tmp];
 
@@ -279,7 +286,7 @@ local function optimize_intervals_simple()
                         local te_B = ints_B_e[l];
 
                         if (ts_B < te_B) and (ts_B >= te_A_in) then
-                            te_A = min(te_A, te_B - gcd_lockout);
+                            te_A = min(te_A, te_B - gcd_lockout + gcd_slack);
                         end
                     end
 
