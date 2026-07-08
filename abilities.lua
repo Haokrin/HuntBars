@@ -1,7 +1,5 @@
 local _, fluffy = ...
 
-local last_fired_ability = nil;
-
 local hit_conversion_table = {
 	0.38,
 	0.38,
@@ -150,39 +148,6 @@ local function get_haste_mod_melee(t)
 	return  haste / (1 + 0.01 * (haste_rating_base + haste_rating) / hit_conversion_table[player_level]);
 end
 
-local function getRangedHitCoefficients()
-	local cc = GetRangedCritChance();
-	local ranged_hit_rating = 0;
-	local player_level = UnitLevel("player");
-
-	if fluffy.client_version > 11307 then
-		ranged_hit_rating = GetCombatRating(7);
-	else
-		ranged_hit_rating = GetHitModifier();
-	end	
-
-
-	local out_cc = 0;
-	local out_hc = 0;
-
-	if cc ~= nil then
-		out_cc = cc;
-	end
-
-	if ranged_hit_rating ~= nil then
-		if fluffy.client_version > 11307 then
-			if player_level ~= nil then
-				out_hc = ranged_hit_rating / hit_conversion_table[player_level] + ranged_hit_rating;
-			end 
-		else
-			out_hc = ranged_hit_rating + fluffy.ranged_hit;
-		end	
-	
-	end
-
-	return out_cc, out_hc;
-end
-
 local function getMeleeHitCoefficients()
 	local cc = GetCritChance();
 	local melee_hit_rating = GetCombatRating(6);
@@ -228,22 +193,6 @@ fluffy.ability_raptorstrike["windows_e"] = {};
 fluffy.ability_meleestrike["windows_e"] = {};
 
 -- UI elements associated with each ability
-fluffy.ability_autoshot["icon"] = nil;
-fluffy.ability_aimedshot["icon"] = nil;
-fluffy.ability_arcaneshot["icon"] = nil;
-fluffy.ability_multishot["icon"] = nil;
-fluffy.ability_steadyshot["icon"] = nil;
-fluffy.ability_raptorstrike["icon"] = nil;
-fluffy.ability_meleestrike["icon"] = nil;
-
-fluffy.ability_autoshot["glow"] = nil;
-fluffy.ability_aimedshot["glow"] = nil;
-fluffy.ability_arcaneshot["glow"] = nil;
-fluffy.ability_multishot["glow"] = nil;
-fluffy.ability_steadyshot["glow"] = nil;
-fluffy.ability_raptorstrike["glow"] = nil;
-fluffy.ability_meleestrike["glow"] = nil;
-
 fluffy.ability_autoshot["bars"] = {};
 fluffy.ability_aimedshot["bars"] = {};
 fluffy.ability_arcaneshot["bars"] = {};
@@ -321,78 +270,36 @@ fluffy.ability_meleestrike["fired"] = 0.0;
 fluffy.ability_meleestrike["next_start"] = 0.0;
 
 -- damage of abilities
+-- The ranged values are BASE damages used to rank abilities against each
+-- other and against auto shot in the window optimizer; crit/hit/talent
+-- multipliers are close to a common factor across the ranged abilities and
+-- are intentionally left out of the comparison.
 fluffy.ability_autoshot["dmg"] = function()
-	-- local cc, hc = getRangedHitCoefficients();
-
-	local base_dmg = fluffy.ranged_dmg_avg + (fluffy.ammo_dps + fluffy.rap/14) * fluffy.ranged_base_speed;
-	-- local ranged_crit_coeff = 2 + fluffy.ranged_crit_modifier;
-	-- local crit_chance_coeff = min(1, max(0, cc - 4.8) * 0.01);
-	-- local hit_chance_coeff = min(100, max(0, 92 + max(0, fluffy.hit_bonus + hc - 1))) * 0.01;
-
-	-- return base_dmg * (1 + crit_chance_coeff * (ranged_crit_coeff - 1)) * hit_chance_coeff * fluffy.ranged_modifier;
-	return base_dmg;
+	return fluffy.ranged_dmg_avg + (fluffy.ammo_dps + fluffy.rap/14) * fluffy.ranged_base_speed;
 end
 
 fluffy.ability_aimedshot["dmg"] = function()
-	-- local cc, hc = getRangedHitCoefficients();
-
-	local base_dmg = fluffy.ranged_dmg_avg + fluffy.ability_aimedshot["flat_bonus"] + fluffy.ammo_dps * fluffy.ranged_base_speed + fluffy.rap * 0.2;
-	-- local ranged_crit_coeff = 2 + fluffy.ranged_crit_modifier;
-
-	-- local crit_chance_coeff = min(1, max(0, cc - 4.8) * 0.01);
-	-- local hit_chance_coeff = min(100, max(0, 92 + max(0, fluffy.hit_bonus + hc - 1))) * 0.01;
-
-	-- return base_dmg * (1 + crit_chance_coeff * (ranged_crit_coeff - 1)) * hit_chance_coeff * fluffy.ranged_modifier;
-
-	return base_dmg;
+	return fluffy.ranged_dmg_avg + fluffy.ability_aimedshot["flat_bonus"] + fluffy.ammo_dps * fluffy.ranged_base_speed + fluffy.rap * 0.2;
 end
 
 fluffy.ability_arcaneshot["dmg"] = function()
-	-- local cc, hc = getRangedHitCoefficients();
 	local base_dmg = fluffy.ability_arcaneshot["flat_bonus"];
 
 	if fluffy.client_version > 11307 then
 		base_dmg = base_dmg + fluffy.rap * 0.15;
 	else
 		base_dmg = base_dmg + GetSpellBonusDamage(7) * 1.5 / 3.5;
-	end	
-
-	-- local ranged_crit_coeff = 2 + fluffy.ranged_crit_modifier;
-
-	-- local crit_chance_coeff = min(1, max(0, cc - 4.8) * 0.01);
-	-- local hit_chance_coeff = min(100, max(0, 92 + max(0, fluffy.hit_bonus + hc - 1))) * 0.01;
-
-	-- return base_dmg * (1 + crit_chance_coeff * (ranged_crit_coeff - 1)) * hit_chance_coeff * fluffy.ranged_modifier;
+	end
 
 	return base_dmg;
 end
 
 fluffy.ability_multishot["dmg"] = function()
-	-- local cc, hc = getRangedHitCoefficients();
-
-	local base_dmg = (fluffy.ranged_dmg_avg + fluffy.ability_multishot["flat_bonus"] + fluffy.ammo_dps * fluffy.ranged_base_speed + fluffy.rap * 0.2);
-	-- local ranged_crit_coeff = 2 + fluffy.ranged_crit_modifier;
-
-	-- local crit_chance_coeff = min(1, max(0, fluffy.multishot_crit_bonus + cc - 4.8) * 0.01);
-	-- local hit_chance_coeff = min(100, max(0, 92 + max(0, fluffy.hit_bonus + hc - 1))) * 0.01;
-
-	-- return base_dmg * (1 + crit_chance_coeff * (ranged_crit_coeff - 1)) * hit_chance_coeff * fluffy.ranged_modifier * fluffy.multishot_modifier;
-
-	return base_dmg;
+	return fluffy.ranged_dmg_avg + fluffy.ability_multishot["flat_bonus"] + fluffy.ammo_dps * fluffy.ranged_base_speed + fluffy.rap * 0.2;
 end
 
 fluffy.ability_steadyshot["dmg"] = function()
-	-- local cc, hc = getRangedHitCoefficients();
-
-	local base_dmg = (fluffy.ranged_dmg_avg + fluffy.ability_steadyshot["flat_bonus"] + fluffy.rap * 0.2);
-	-- local ranged_crit_coeff = 2 + fluffy.ranged_crit_modifier;
-
-	-- local crit_chance_coeff = min(1, max(0, cc - 4.8) * 0.01);
-	-- local hit_chance_coeff = min(100, max(0, 92 + max(0, fluffy.hit_bonus + hc - 1))) * 0.01;
-
-	-- return base_dmg * (1 + crit_chance_coeff * (ranged_crit_coeff - 1)) * hit_chance_coeff * fluffy.ranged_modifier;
-
-	return base_dmg;
+	return fluffy.ranged_dmg_avg + fluffy.ability_steadyshot["flat_bonus"] + fluffy.rap * 0.2;
 end
 
 fluffy.ability_raptorstrike["dmg"] = function()
@@ -418,15 +325,6 @@ fluffy.ability_meleestrike["dmg"] = function()
 
 	return base_dmg * (1 + crit_chance_coeff * (melee_crit_coeff - 1)) * hit_chance_coeff * fluffy.melee_modifier;
 end
-
--- bound cooldowns
-fluffy.ability_autoshot["triggers_cd"] = {};
-fluffy.ability_aimedshot["triggers_cd"] = {fluffy.ability_autoshot};
-fluffy.ability_arcaneshot["triggers_cd"] = {};
-fluffy.ability_multishot["triggers_cd"] = {};
-fluffy.ability_steadyshot["triggers_cd"] = {};
-fluffy.ability_raptorstrike["triggers_cd"] = {fluffy.ability_meleestrike};
-fluffy.ability_meleestrike["triggers_cd"] = {};
 
 -- are abilities on global cooldowns?
 fluffy.ability_autoshot["gcd"] = 0;
@@ -527,84 +425,19 @@ fluffy.ability_aimedshot["cd"] = function(t)
 end
 fluffy.ability_arcaneshot["cd"] = function(t)
 	local start_, gcd_, _ = GetSpellCooldown(fluffy.spell_id_arcane);
-
-	-- if last_fired_ability ~= fluffy.ability_arcaneshot then
-	-- 	return fluffy.ability_arcaneshot["fired"] + fluffy.ability_arcaneshot["cdb"](t) - t;
-	-- end
     return start_ + gcd_ - t;
 end
 fluffy.ability_multishot["cd"] = function(t)
 	local start_, gcd_, _ = GetSpellCooldown(fluffy.spell_id_multi);
-	if start_ + gcd_ > fluffy.ability_multishot["fired"]  and last_fired_ability == fluffy.ability_multishot then
-		return fluffy.ability_multishot["fired"] + fluffy.ability_multishot["cdb"](t) - t;
-	end
     return start_ + gcd_ - t;
 end
 fluffy.ability_meleestrike["cd"] = function(t)
-	-- print(max(fluffy.ability_meleestrike["next_start"] - t, tf - t));
     return fluffy.ability_meleestrike["next_start"] - t;
 end
 fluffy.ability_raptorstrike["cd"] = function(t)
 	local start_, gcd_, _ = GetSpellCooldown(fluffy.spell_id_raptor);
-	-- if start_ + gcd_ > fluffy.ability_raptorstrike["fired"] then
-	-- 	return fluffy.ability_raptorstrike["fired"] + fluffy.ability_raptorstrike["cdb"](t) - t;
-	-- end
     return max(start_ + gcd_ - t, fluffy.ability_meleestrike["cd"](t));
 end
-
--- hypotetical cooldowns of abilities for simulation purposes
-fluffy.ability_autoshot["cdh"] = function(t)
-	local tf = fluffy.ability_autoshot["fired"];
-    -- return max(tf + fluffy.ability_autoshot["cdb"](tf + fluffy.ability_autoshot["cast"](tf)) - fluffy.ability_autoshot["cast"](tf) - t, 0.0);
-    return max(tf + fluffy.ability_autoshot["cdb"](tf + fluffy.ability_autoshot["cast"](tf)) - t, -6);
-end
-fluffy.ability_aimedshot["cdh"] = function(t)
-	local tf = fluffy.ability_aimedshot["fired"];
-    return max(tf + fluffy.ability_aimedshot["cdb"](tf + fluffy.ability_aimedshot["cast"](tf)) - fluffy.ability_aimedshot["cast"](tf) - t, -6);
-end
-fluffy.ability_arcaneshot["cdh"] = function(t)
-	local tf = fluffy.ability_arcaneshot["fired"];
-    return max(tf + fluffy.ability_arcaneshot["cdb"](tf + fluffy.ability_arcaneshot["cast"](tf)) - fluffy.ability_arcaneshot["cast"](tf) - t, -6);
-end
-fluffy.ability_multishot["cdh"] = function(t)
-	local tf = fluffy.ability_multishot["fired"];
-    return max(tf + fluffy.ability_multishot["cdb"](tf + fluffy.ability_multishot["cast"](tf)) - t, -6);
-end
-fluffy.ability_raptorstrike["cdh"] = function(t)
-	local tf = max(fluffy.ability_raptorstrike["fired"] + fluffy.ability_raptorstrike["cdb"](0), fluffy.ability_meleestrike["fired"] + fluffy.ability_meleestrike["cdb"](fluffy.ability_meleestrike["fired"]));
-    return max(tf - t, -6);
-end
-fluffy.ability_meleestrike["cdh"] = function(t)
-	local tf = fluffy.ability_meleestrike["fired"];
-    return max(tf + fluffy.ability_meleestrike["cdb"](tf + fluffy.ability_meleestrike["cast"](tf)) - fluffy.ability_meleestrike["cast"](tf) - t, -6);
-end
-
-
-
-
--- estimated dps of abilities
-fluffy.ability_autoshot["dps"] = function(t)
-	return fluffy.ability_autoshot["dmg"]() / (fluffy.ability_autoshot["cast"](t) + fluffy.ability_autoshot["cdb"](t));
-end
-fluffy.ability_aimedshot["dps"] = function(t)
-	return fluffy.ability_aimedshot["dmg"]() / (fluffy.ability_aimedshot["cast"](t) + fluffy.ability_aimedshot["cdb"](t));
-end
-fluffy.ability_arcaneshot["dps"] = function(t)
-	return fluffy.ability_arcaneshot["dmg"]() / (fluffy.ability_arcaneshot["cast"](t) + fluffy.ability_arcaneshot["cdb"](t));
-end
-fluffy.ability_multishot["dps"] = function(t)
-	return fluffy.ability_multishot["dmg"]() / (fluffy.ability_multishot["cast"](t) + fluffy.ability_multishot["cdb"](t));
-end
-fluffy.ability_steadyshot["dps"] = function(t)
-	return fluffy.ability_steadyshot["dmg"]() / (fluffy.ability_steadyshot["cast"](t) + fluffy.ability_steadyshot["cdb"](t));
-end
-fluffy.ability_raptorstrike["dps"] = function(t)
-	return fluffy.ability_raptorstrike["dmg"]() / (fluffy.ability_raptorstrike["cast"](t) + fluffy.ability_raptorstrike["cdb"](t));
-end
-fluffy.ability_meleestrike["dps"] = function(t)
-	return fluffy.ability_meleestrike["dmg"]() / (fluffy.ability_meleestrike["cast"](t) + fluffy.ability_meleestrike["cdb"](t));
-end
-
 
 local function update_ability_stats(ability)
 
@@ -621,7 +454,7 @@ local function update_ability_stats(ability)
 
 	for i=1,#ability["ids"] do
 		local id = ability["ids"][i][1];
-		local modifier = 0;
+		local modifier;
 		if fluffy.client_version > 11307 then
 			modifier = ability["ids"][i][2];
 		else
@@ -641,7 +474,13 @@ local function update_ability_stats(ability)
 	end
 end
 
-function update_spell_data()
+function fluffy.update_spell_data()
+
+	-- Guard: the UNIT_SPELLCAST_SENT handler calls this for every class,
+	-- but the consider_* keys only exist in a hunter's saved variables.
+	if fluffy.is_player_hunter == false or FluffyDBPC == nil then
+		return;
+	end
 
 	fluffy.ability_autoshot["forbid"] = false;
 	fluffy.ability_aimedshot["forbid"] = true;
@@ -670,9 +509,8 @@ local function isSpellAnAbility(spellID, ability)
 end
 
 local function update_spell_finished(spellID)
-	
+
 	local t = GetTime();
-	last_fired_ability = nil;
 
 	if isSpellAnAbility(spellID, fluffy.ability_aimedshot) then
 		fluffy.ability_aimedshot["fired"] = t;
@@ -682,19 +520,12 @@ local function update_spell_finished(spellID)
 		fluffy.ability_autoshot["next_start"] = t + speed - fluffy.ability_autoshot["cast"](t);
 		fluffy.ability_autoshot["next_fired"] = t + speed;
 		fluffy.swing_speed_snapshot = speed;
-		last_fired_ability = fluffy.ability_aimedshot;
-
-		-- analyze_game_state(fluffy.future_window_lenght);
 
 	elseif isSpellAnAbility(spellID, fluffy.ability_multishot) then
 		fluffy.ability_multishot["fired"] = t;
-		last_fired_ability = fluffy.ability_multishot;
-		-- analyze_game_state(fluffy.future_window_lenght);
 
 	elseif isSpellAnAbility(spellID, fluffy.ability_arcaneshot) then
 		fluffy.ability_arcaneshot["fired"] = t;
-		last_fired_ability = fluffy.ability_arcaneshot;
-		-- analyze_game_state(fluffy.future_window_lenght);
 
 	elseif isSpellAnAbility(spellID, fluffy.ability_autoshot) then
 		-- Auto shot timing is set exclusively by the COMBAT_LOG_EVENT_UNFILTERED
@@ -703,86 +534,28 @@ local function update_spell_finished(spellID)
 		-- value, then the combat log fires ~1 frame later with a slightly
 		-- different calculation, producing a visible jump every auto shot cycle.
 		fluffy.ability_autoshot["fired"] = t;
-		last_fired_ability = fluffy.ability_autoshot;
-
-		-- analyze_game_state(fluffy.future_window_lenght);
 
 	elseif isSpellAnAbility(spellID, fluffy.ability_steadyshot) then
 		fluffy.ability_steadyshot["fired"] = t;
-		last_fired_ability = fluffy.ability_steadyshot;
-		-- analyze_game_state(fluffy.future_window_lenght);
 
 	elseif (spellID == fluffy.spell_id_FD) then
 		fluffy.ability_autoshot["fired"] = t;
 
 		fluffy.autoshot_delay = t + fluffy.ability_autoshot["cdb"](t);
 
-		-- fluffy.ability_autoshot["next_start"] = t + fluffy.ability_autoshot["cdb"](t);
-		-- fluffy.ability_autoshot["next_fired"] = fluffy.ability_autoshot["next_start"] + fluffy.ability_autoshot["cast"](t);
-		last_fired_ability = fluffy.spell_id_FD;
-
 		local mainSpeed, _ = UnitAttackSpeed("player");
 		fluffy.ability_meleestrike["fired"] = t;
 		fluffy.ability_meleestrike["next_start"] = t + mainSpeed;
-		-- analyze_game_state(fluffy.future_window_lenght);
 
 	elseif (spellID == fluffy.spell_id_readiness) then
 
 		fluffy.autoshot_delay = t + 0.5;
 		fluffy.ability_autoshot["next_start"] = fluffy.autoshot_delay;
 		fluffy.ability_autoshot["next_fired"] = fluffy.ability_autoshot["next_start"] + fluffy.ability_autoshot["cast"](t);
-		
-		last_fired_ability = fluffy.spell_id_readiness;
 
 	end
-	last_fired_ability = nil;
 	fluffy.logic_dirty = true;
 end
-
-function store_game_state(gs, abilities)
-	if gs ~= nil and abilities ~= nil then
-		for i=1,#abilities do
-			gs[abilities[i]] = abilities[i]["fired"];
-		end
-	end
-end
-
-function restore_game_state(gs, abilities)
-	if gs ~= nil and abilities ~= nil then
-		for i=1,#abilities do
-			if gs[abilities[i]] ~= nil then
-				abilities[i]["fired"] = gs[abilities[i]];
-			end
-		end
-	end
-end
-
-function update_cooldowns_hypotetical(abilities)
-	local t = GetTime();
-	if gs ~= nil and abilities ~= nil then
-		for i=1,#abilities do
-			abilities[i]["fired"] = t + abilities[i]["cd"](t) - abilities[i]["cdb"](t + abilities[i]["cast"](t));
-		end
-	end
-end
-
-function revert_cast(A, t)
-    A["fired"] = t;
-
-    for i=1,#A["triggers_cd"] do
-        A["triggers_cd"][i]["fired"] = t;
-    end
-end
-
-function cast_ability(A, t)
-    A["fired"] = t + A["cast"](t);
-
-    for i=1,#A["triggers_cd"] do
-        A["triggers_cd"][i]["fired"] = A["fired"];
-    end
-end
-
-local local_game_state = {};
 
 fluffy.autoshot_delay = 0;
 fluffy.is_casting = false;
@@ -790,106 +563,27 @@ fluffy.is_casting = false;
 local function update_spell_started(spellID)
 
 	local t = GetTime();
-	last_fired_ability = nil;
 	fluffy.autoshot_delay = 0;
 
-	-- print(UnitCastingInfo("player"));
-
 	if isSpellAnAbility(spellID, fluffy.ability_aimedshot) then
-		-- fluffy.ability_aimedshot["fired"] = t + fluffy.ability_aimedshot["cast"](t);
-
-		-- local speed, _, _, _, _, _ = UnitRangedDamage("player");
-		-- fluffy.ability_autoshot["fired"] = t + fluffy.ability_autoshot["cast"](t);
-		-- fluffy.ability_autoshot["next_start"] = t + speed - fluffy.ability_autoshot["cast"](t);
-		-- fluffy.ability_autoshot["next_fired"] = t + speed;
-		-- -- store_game_state(local_game_state, {fluffy.ability_aimedshot});
-		-- last_fired_ability = fluffy.ability_aimedshot;
-
+		-- An Aimed Shot cast blocks the pending auto shot; the next auto
+		-- cannot start before the cast end plus a full swing cooldown.
 		fluffy.autoshot_delay = t + fluffy.ability_aimedshot["cast"](t) + fluffy.ability_autoshot["cdb"](t + fluffy.ability_aimedshot["cast"](t));
-
-		-- analyze_game_state(fluffy.future_window_lenght);
-
-	elseif isSpellAnAbility(spellID, fluffy.ability_multishot) then
-		-- fluffy.ability_multishot["fired"] = t + fluffy.ability_multishot["cast"](t);
-		-- store_game_state(local_game_state, {fluffy.ability_multishot});
-		-- last_fired_ability = fluffy.ability_multishot;
-		-- analyze_game_state(fluffy.future_window_lenght);
-		-- fluffy.cast_finishes = t + fluffy.ability_multishot["cast"](t);
-
-	elseif isSpellAnAbility(spellID, fluffy.ability_arcaneshot) then
-		-- fluffy.ability_arcaneshot["fired"] = t + fluffy.ability_arcaneshot["cast"](t);
-		-- store_game_state(local_game_state, {fluffy.ability_arcaneshot});
-		-- last_fired_ability = fluffy.ability_arcaneshot;
-		-- analyze_game_state(fluffy.future_window_lenght);
-		-- fluffy.cast_finishes = t;
-
-	elseif isSpellAnAbility(spellID, fluffy.ability_steadyshot) then
-		-- fluffy.ability_steadyshot["fired"] = t + fluffy.ability_steadyshot["cast"](t);
-		-- store_game_state(local_game_state, {fluffy.ability_steadyshot});
-		-- last_fired_ability = fluffy.ability_steadyshot;
-		-- analyze_game_state(fluffy.future_window_lenght);
-		-- fluffy.cast_finishes = t + fluffy.ability_steadyshot["cast"](t);
-		-- print(fluffy.ability_steadyshot["cast"](t));
-
-	elseif isSpellAnAbility(spellID, fluffy.ability_autoshot) then
-		-- fluffy.cast_finishes = t + fluffy.ability_autoshot["cast"](t);
-		-- fluffy.ability_autoshot["next_fired"] = t + fluffy.ability_autoshot["cast"](t);
-		-- fluffy.ability_autoshot["fired"] = t + fluffy.ability_autoshot["cast"](t);
-		-- -- store_game_state(local_game_state, {fluffy.ability_autoshot});
-		-- last_fired_ability = fluffy.ability_autoshot;
-		-- -- analyze_game_state(fluffy.future_window_lenght);
-
-	-- elseif (spellID == fluffy.spell_id_FD) then
-	-- 	local speed, _, _, _, _, _ = UnitRangedDamage("player");
-	-- 	fluffy.ability_autoshot["fired"] = t;
-	-- 	fluffy.ability_autoshot["next_start"] = t + speed - fluffy.ability_autoshot["cast"](t);
-	-- 	fluffy.ability_autoshot["next_fired"] = t + speed;
-
-	-- 	-- analyze_game_state(fluffy.future_window_lenght);
-
 	end
-	last_fired_ability = nil;
 end
 
 fluffy.cast_finishes = 0;
-local function update_spell_interrupted(spellID)
-	last_fired_ability = nil;
+local function update_spell_interrupted()
 	fluffy.autoshot_delay = 0;
 	fluffy.cast_finishes = 0;
-	-- local t = GetTime();
-	-- if isSpellAnAbility(spellID, fluffy.ability_aimedshot) then
-	-- 	restore_game_state(local_game_state, {fluffy.ability_aimedshot});
-	-- 	analyze_game_state(fluffy.future_window_lenght);
-
-	-- elseif isSpellAnAbility(spellID, fluffy.ability_multishot) then
-	-- 	restore_game_state(local_game_state, {fluffy.ability_multishot});
-	-- 	analyze_game_state(fluffy.future_window_lenght);
-
-	-- elseif isSpellAnAbility(spellID, fluffy.ability_arcaneshot) then
-	-- 	restore_game_state(local_game_state, {fluffy.ability_arcaneshot});
-	-- 	analyze_game_state(fluffy.future_window_lenght);
-
-	-- elseif isSpellAnAbility(spellID, fluffy.ability_autoshot) then
-	-- 	restore_game_state(local_game_state, {fluffy.ability_autoshot});
-	-- 	analyze_game_state(fluffy.future_window_lenght);
-
-	-- elseif isSpellAnAbility(spellID, fluffy.ability_steadyshot) then
-	-- 	restore_game_state(local_game_state, {fluffy.ability_steadyshot});
-	-- 	analyze_game_state(fluffy.future_window_lenght);
-
-	-- end
 end
 
 local current_auto_start = 0;
 local current_auto_finish = 0;
-local prev_auto_start = 0;
-local prev_auto_finish = 0;
 local next_auto_start = 0;
 local next_auto_finish = 0;
 local function parse_combat_event(log_message)
 
-	-- print(time() - log_message[1]);
-	-- local t = (time() - log_message[1]) + GetTime();
 	local t = GetTime();
 	local event = log_message[2];
 	local src = log_message[4];
@@ -897,12 +591,6 @@ local function parse_combat_event(log_message)
     if src == fluffy.player_id then
 
 		local current_casting_info = fluffy.is_casting;
-		
-		local spell_id = log_message[12];
-
-		-- if spell_id == 75 or spell_id == 2973 then
-		-- 	print("[" .. spell_id .. "]:" .. event .. " - " .. t);
-		-- end
 
         if event == "SWING_DAMAGE" or event == 'SWING_MISSED' then
 			local offhand_hit = log_message[21];
@@ -1006,7 +694,7 @@ local function parse_combat_event(log_message)
 			--   pred err = actual fire vs predicted next_fired (+ = fired late;
 			--              should stay within ~±50 ms when nothing clipped)
 			if fluffy.debug_output and prev_fired > 0 and predicted_fire > 0 then
-				print_debug(string.format(
+				fluffy.print_debug(string.format(
 					"AS fired | aim %.3fs (model %.3fs) | cycle %.3fs (eWS %.3f) | pred err %+d ms",
 					measured_aim, curr_cast,
 					current_auto_finish - prev_fired, curr_speed,
@@ -1027,13 +715,9 @@ local function parse_combat_event(log_message)
 			fluffy.is_casting = false;
 
 		elseif event == "SPELL_CAST_INTERRUPTED" then
-			
+
 			fluffy.is_casting = false;
 
-			-- current_auto_start =  0;
-			-- current_auto_finish = 0;
-		-- elseif log_message[12] == fluffy.spell_id_auto then
-		-- 	print("AS[" .. log_message[2] .. "]: " .. log_message[1]);
 		end
 
 		if current_casting_info ~= fluffy.is_casting then
@@ -1072,11 +756,6 @@ fluffy_frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
 fluffy_frame:RegisterEvent("UNIT_SPELLCAST_SENT");
 fluffy_frame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED");
 fluffy_frame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
--- fluffy_frame:RegisterEvent("START_AUTOREPEAT_SPELL");
--- fluffy_frame:RegisterEvent("STOP_AUTOREPEAT_SPELL");
--- fluffy_frame:RegisterEvent("PLAYER_REGEN_DISABLED");
--- fluffy_frame:RegisterEvent("PLAYER_REGEN_ENABLED");
-
 
 fluffy_frame:SetScript("OnEvent",
     function(self, event, arg1, arg2, arg3, arg4)
@@ -1086,38 +765,17 @@ fluffy_frame:SetScript("OnEvent",
 
 		elseif event == "UNIT_SPELLCAST_SENT" and arg1 == "player"  then
 			update_spell_started(arg4);
-			update_player_stats();
-			update_spell_data();
-			
+			fluffy.update_player_stats();
+			fluffy.update_spell_data();
+
 		elseif event == "UNIT_SPELLCAST_INTERRUPTED" and arg1 == "player"  then
-			update_spell_interrupted(arg4);
-			update_player_stats();
-			update_spell_data();
+			update_spell_interrupted();
+			fluffy.update_player_stats();
+			fluffy.update_spell_data();
 
 		elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
 			parse_combat_event({CombatLogGetCurrentEventInfo()});
 
-		-- elseif event == "START_AUTOREPEAT_SPELL" then
-		-- 	local t = GetTime();
-		-- 	fluffy.cast_finishes = t;
-		-- 	fluffy.ability_autoshot["next_fired"] = t + fluffy.ability_autoshot["cast"](t);
-
-		-- elseif event == "STOP_AUTOREPEAT_SPELL" then
-			
-		-- elseif event == "PLAYER_REGEN_DISABLED" then
-		-- 	if fluffy.show_only_in_combat == 1 and not FluffyDBPC["hidden"][1] then
-		-- 		FluffyBar:Show();
-		-- 	end
-		
-		-- elseif event == "PLAYER_REGEN_ENABLED" then
-		-- 	if fluffy.show_only_in_combat == 1 then
-		-- 		FluffyBar:Hide();
-		-- 	else
-		-- 		if not FluffyDBPC["hidden"][1] then
-		-- 			FluffyBar:Show();
-		-- 		end
-		-- 	end
-		
 		end
 
     end

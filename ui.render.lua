@@ -135,37 +135,23 @@ local function update_autoshot_spark(idx, t, fluffyBar_len, fluffyBar_len_second
 
     local shift_y = 0.5;
 
-    if fluffy.display_mode == 0 then
-        FluffyBars_autoshotsparks[idx]:Hide();
+    local auto_t = fluffy.autoshot_sparks[idx] + (fluffy.spark_correction or 0);
+    local spark_bar = FluffyBars_autoshotsparks[idx];
 
-        local nmax = #FluffyBars_autoshotsparks;
-        if idx > nmax then
-            return;
-        end
+    local active_spark_position_seconds = auto_t - t;
+    local active_spark_position = fluffyBar_len * active_spark_position_seconds / (fluffyBar_len_seconds);
 
-        local auto_t = fluffy.autoshot_sparks[idx] + (fluffy.spark_correction or 0);
-        local spark_bar = FluffyBars_autoshotsparks[idx];
-
-        local active_spark_position_seconds = auto_t - t;
-        local active_spark_position = fluffyBar_len * active_spark_position_seconds / (fluffyBar_len_seconds);
-
-        if active_spark_position_seconds <= 0
-                or active_spark_position_seconds > fluffyBar_len_seconds + fluffy.movement_spark_interval then
-            spark_bar:Hide();
-        elseif active_spark_position_seconds > fluffyBar_len_seconds then
-            spark_bar:ClearAllPoints();
-            spark_bar:SetPoint('LEFT', fluffyBar_len + 3, shift_y - 1);
-            spark_bar:Show();
-        else
-            local movement_start_seconds = max(0, active_spark_position_seconds - fluffy.movement_spark_interval);
-            local ps = movement_start_seconds * fluffyBar_len / (fluffyBar_len_seconds);
-
-            spark_bar:ClearAllPoints();
-            spark_bar:SetPoint('LEFT', active_spark_position + 3, shift_y - 1);
-            spark_bar:Show();
-        end
-    elseif fluffy.display_mode == 1 then
-        -- display_mode 1 (dual-spark mirror layout) is not yet implemented.
+    if active_spark_position_seconds <= 0
+            or active_spark_position_seconds > fluffyBar_len_seconds + fluffy.movement_spark_interval then
+        spark_bar:Hide();
+    elseif active_spark_position_seconds > fluffyBar_len_seconds then
+        spark_bar:ClearAllPoints();
+        spark_bar:SetPoint('LEFT', fluffyBar_len + 3, shift_y - 1);
+        spark_bar:Show();
+    else
+        spark_bar:ClearAllPoints();
+        spark_bar:SetPoint('LEFT', active_spark_position + 3, shift_y - 1);
+        spark_bar:Show();
     end
 end
 
@@ -201,7 +187,7 @@ end
 -- Renders all autoshot sparks and ability bars.
 -- ---------------------------------------------------------------------------
 fluffy.draw_frame = function(t, fluffyBar_len, fluffyBar_len_s)
-    local n_sparks = table.getn(fluffy.autoshot_sparks);
+    local n_sparks = #fluffy.autoshot_sparks;
 
     for i=1, min(n_sparks, #FluffyBars_autoshotsparks) do
         update_autoshot_spark(i, t, fluffyBar_len, fluffyBar_len_s);

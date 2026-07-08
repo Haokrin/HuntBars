@@ -25,7 +25,7 @@ fluffy.update_labels = function(t)
 
             -- Colour by rotation speed: gold = slow, orange = medium, green = fast, red = extreme.
             local mode = fluffy.rotation_mode;
-            if mode == "French" or mode == "LongFrench" then
+            if mode == "French" or mode == "LongFrench" or mode == "ShortFrench" then
                 fluffy.rotation_label:SetTextColor(1, 0.82, 0, 1);    -- gold
             elseif mode == "Skipping" or mode == "1:1" then
                 fluffy.rotation_label:SetTextColor(1, 0.55, 0.05, 1); -- orange
@@ -80,7 +80,7 @@ fluffy.update_labels = function(t)
     -- Shows one-way compensation value. Colour thresholds (one-way):
     -- green < 50 ms (RTT: < 100 ms), yellow < 100 ms (RTT: < 200 ms), red >= 100 ms
     if fluffy.latency_label then
-        local ms = latency_to_ms(fluffy.latency);
+        local ms = fluffy.latency_to_ms(fluffy.latency);
         fluffy.latency_label:SetText(ms .. " ms");
         if fluffy.latency < fluffy.latency_color_threshold_green then
             fluffy.latency_label:SetTextColor(0.4, 1, 0.4, 1);

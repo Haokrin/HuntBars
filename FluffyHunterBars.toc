@@ -4,7 +4,7 @@
 ## Notes: Tells the player whenever it is benefical to cast certain abilities in order to maximize single target dps
 
 ## Author: Fluffydork of Nethergarde Keep (EU)
-## Version: 2.4.0
+## Version: 2.5.0
 
 ## X-Category: Combat
 
@@ -18,18 +18,8 @@ preamble.debug.lua
 preamble.variables.lua
 preamble.auxiliary.lua
 
-# files related to the player power
-# tracks talents, weapons, agility attack power, hit, crit as a function of time
+# tracks player attack power and target debuffs (Hunter's Mark, Expose Weakness)
 player.stats.lua
-
-# tracks haste buffs and calculates haste as a function of time
-player.haste.lua
-
-# tracks armor pene buffs and calculates arp as a function of time
-player.arp.lua
-
-
-player.damage.lua
 
 abilities.lua
 recommendation_calculation.lua
@@ -44,4 +34,3 @@ ui.render.lua
 ui.labels.lua
 ui.core.lua
 core.lua
-

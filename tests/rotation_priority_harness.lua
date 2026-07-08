@@ -102,7 +102,7 @@ fluffy.ability_arcaneshot["known"] = true;
 fluffy.ability_steadyshot["flat_bonus"] = 150;
 fluffy.ability_multishot["flat_bonus"]  = 205;
 fluffy.ability_arcaneshot["flat_bonus"] = 273;
-InitDB();
+fluffy.InitDB();
 
 -- pin latency to known values for deterministic assertions
 local ONE_WAY, RTT = 0.04, 0.08;
@@ -197,7 +197,7 @@ now = 10.5;  combat_log_payload[1] = now; combat_log_payload[2] = "SPELL_CAST_SU
 for _, f in ipairs(frames) do if f.OnEvent then f.OnEvent(f, "COMBAT_LOG_EVENT_UNFILTERED"); end end
 
 now = 10.6;
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 
 local sWe = fluffy.ability_steadyshot["windows_e"];
 local mWs, mWe = fluffy.ability_multishot["windows_s"], fluffy.ability_multishot["windows_e"];
@@ -218,7 +218,7 @@ check_priority_properties("A", now);
 -- =====================================================================
 setup_cycle_state(1.5, 0.05, 20.3);
 now = 20.3;
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 
 check("B: 1:1 rotation shows no multi windows",  #fluffy.ability_multishot["windows_s"], 0);
 check("B: 1:1 rotation shows no arcane windows", #fluffy.ability_arcaneshot["windows_s"], 0);
@@ -236,8 +236,7 @@ for ews10 = 9, 30 do          -- eWS 0.9 .. 3.0
         local t = 100 + ews10 * 40 + frac * 10;
         setup_cycle_state(ews, frac, t);
         now = t;
-        analyze_game_state(3, t);
-        local before = failures;
+        fluffy.analyze_game_state(3, t);
         sweep_steady_windows = sweep_steady_windows +
             check_priority_properties(string.format("C ews=%.1f frac=%.1f", ews, frac), t);
         sweep_checks = sweep_checks + 1;
@@ -255,24 +254,95 @@ print(string.format("INFO  sweep: %d states checked, %d steady windows seen", sw
 setup_cycle_state(3.0, 0.1, 5000);
 now = 5000;
 fluffy.ability_multishot["fired"] = 0;
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 check("D: multi never fired -> ready now", fluffy.multi_ready_at, now, 1e-6);
 
 fluffy.ability_multishot["fired"] = now - 3;
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 check("D: multi fired 3s ago -> ready in 7 (10s cd)", fluffy.multi_ready_at, now + 7, 1e-6);
 
 fluffy.ability_multishot["fired"] = 0;
 spell_cooldowns[fluffy.spell_id_multi] = {now - 4, 10};
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 check("D: API cooldown (no tracked fire) -> ready in 6", fluffy.multi_ready_at, now + 6, 1e-6);
 spell_cooldowns[fluffy.spell_id_multi] = nil;
 
 FluffyDBPC["consider_multi"][1] = false;
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 assert(fluffy.multi_ready_at == math.huge, "multi disabled must yield math.huge");
 print(string.format("PASS  %-58s %s", "D: multi disabled -> never recolors", "inf"));
 FluffyDBPC["consider_multi"][1] = true;
+
+-- =====================================================================
+-- Scenario E: rotation-mode label thresholds, checked at the anchor
+-- points from the rotationtools DPS-over-haste graphs (a 3.0 weapon for
+-- clean numbers; the graphs use the 2.9 Sunfury bow).  BM = with 5/5
+-- Serpent's Swiftness (haste 1.38 with quiver), SV = quiver only (1.15).
+-- =====================================================================
+local function check_label(label, got, want)
+    if got == want then
+        print(string.format("PASS  %-58s %s", label, got));
+    else
+        failures = failures + 1;
+        print(string.format("FAIL  %-58s got %s, want %s", label, got, want));
+    end
+end
+
+fluffy.serpent_swiftness = 1.2;  -- BM: 5/5 Serpent's Swiftness
+check_label("E: BM base 2.17 -> French",            fluffy.derive_rotation_mode(2.17), "French");
+check_label("E: BM hawk 1.89 -> LongFrench",        fluffy.derive_rotation_mode(1.89), "LongFrench");
+check_label("E: BM RF 1.55 -> 1:1",                 fluffy.derive_rotation_mode(1.55), "1:1");
+check_label("E: BM RF+hawk 1.35 -> Skipping",       fluffy.derive_rotation_mode(1.35), "Skipping");
+check_label("E: BM RF+lust 1.19 -> Skipping",       fluffy.derive_rotation_mode(1.19), "Skipping");
+check_label("E: BM RF+hawk+lust 0.94 -> 2:3",       fluffy.derive_rotation_mode(0.94), "2:3");
+check_label("E: BM RF+lust+pot 0.83 -> 1:2",        fluffy.derive_rotation_mode(0.83), "1:2");
+check_label("E: BM RF+hawk+lust+pot+DST 0.66 -> 2:5", fluffy.derive_rotation_mode(0.66), "2:5");
+check_label("E: below 0.62 -> 1:3",                 fluffy.derive_rotation_mode(0.60), "1:3");
+
+fluffy.serpent_swiftness = 1.0;  -- SV: no Serpent's Swiftness
+check_label("E: SV base 2.61 -> ShortFrench",       fluffy.derive_rotation_mode(2.61), "ShortFrench");
+check_label("E: SV hawk 2.27 -> French",            fluffy.derive_rotation_mode(2.27), "French");
+check_label("E: SV RF 1.86 -> LongFrench",          fluffy.derive_rotation_mode(1.86), "LongFrench");
+
+-- =====================================================================
+-- Scenario F: weave-aware melee windows.  Per the rotation overview,
+-- ranged damage has priority over weaving: no melee window may suggest
+-- starting a weave inside [aim_start - weave_time - RTT, fire] of any
+-- predicted auto shot, and windows must resume at the fire time.
+-- =====================================================================
+setup_cycle_state(3.0, 0.1, 6000);
+now = 6000;
+fluffy.ability_raptorstrike["known"] = true;
+fluffy.melee_mh_weapon_id = 1;
+fluffy.ability_meleestrike["next_start"] = 0;
+fluffy.analyze_game_state(3, now);
+
+local rWs, rWe = fluffy.ability_raptorstrike["windows_s"], fluffy.ability_raptorstrike["windows_e"];
+assert(#rWs >= 2, "expected raptor windows split around predicted autos");
+local weave_overlap_checks = 0;
+for i = 1, #rWs do
+    for k = 1, #fluffy.autoshot_sparks do
+        local fire = fluffy.autoshot_sparks[k];
+        local blocked_from = fire - fluffy.ability_autoshot["cast"](fire) - fluffy.weave_time - RTT;
+        local lo = math.max(rWs[i], blocked_from);
+        local hi = math.min(rWe[i], fire);
+        if hi - lo > 0.005 then
+            failures = failures + 1;
+            print(string.format("FAIL  F: raptor window [%.3f..%.3f] overlaps weave-blocked [%.3f..%.3f]",
+                rWs[i], rWe[i], blocked_from, fire));
+        end
+        weave_overlap_checks = weave_overlap_checks + 1;
+    end
+end
+print(string.format("INFO  F: %d weave overlap checks across %d raptor windows", weave_overlap_checks, #rWs));
+
+local first_fire = fluffy.autoshot_sparks[1];
+check("F: first raptor window ends before the incoming auto",
+      rWe[1], first_fire - fluffy.ability_autoshot["cast"](first_fire) - fluffy.weave_time - RTT, 1e-6);
+check("F: second raptor window resumes at the auto fire time",
+      rWs[2], first_fire, 1e-6);
+fluffy.ability_raptorstrike["known"] = false;
+fluffy.melee_mh_weapon_id = 0;
 
 -- ---------------------------------------------------------------------------
 print("");

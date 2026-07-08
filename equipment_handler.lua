@@ -4,13 +4,13 @@ local tooltip_weapon = CreateFrame('GameTooltip', "WeaponTooltip", UIParent, 'Ga
 tooltip_weapon:SetOwner(WorldFrame, "ANCHOR_NONE");
 tooltip_weapon:AddFontStrings(
     tooltip_weapon:CreateFontString( "$parentTextLeft1", nil, "GameTooltipText" ),
-    tooltip_weapon:CreateFontString( "$parentTextRight1", nil, "GameTooltipText" ) 
+    tooltip_weapon:CreateFontString( "$parentTextRight1", nil, "GameTooltipText" )
 );
 
 local function get_weapon_speed(tooltip_line)
 	local out = 0;
 
-	local splt = mysplit_speed(tooltip_line);
+	local splt = fluffy.mysplit_speed(tooltip_line);
 	local val = tonumber(splt[2]);
 
 	if val ~= nil then
@@ -24,21 +24,20 @@ local function get_weapon_damage_range(tooltip_line)
 	local dmg_min = 0;
 	local dmg_max = 0;
 
-	local splt = mysplit_damage(tooltip_line);
+	local splt = fluffy.mysplit_damage(tooltip_line);
 
-	local nsplits = #splt;
 	local idx1 = 1;
 	local idx2 = 2;
 
 	if #splt >= 2 then
 		local val1 = tonumber(splt[idx1]);
 		local val2 = tonumber(splt[idx2]);
-	
+
 		if val1 ~= nil then
 			dmg_min = val1;
 			dmg_max = val1;
 		end
-	
+
 		if val2 ~= nil then
 			dmg_max = val2;
 		end
@@ -58,11 +57,11 @@ local function parse_weapon_info(slot_id, db)
 
 	if item_id_ ~= nil and item_id_ ~= 0 then
 		if db[item_id_] == nil then
-			local itemName, itemLink = GetItemInfo(item_id_);
-		
+			local _, itemLink = GetItemInfo(item_id_);
+
 			tooltip_weapon:ClearLines()
 			tooltip_weapon:SetOwner(WorldFrame, "ANCHOR_NONE");
-			
+
 			if pcall(function() tooltip_weapon:SetHyperlink(itemLink) end) then
 				-- Scan tooltip lines until we find a valid damage range AND speed.
 				-- We stop updating once we have both, so later lines (like the
@@ -90,8 +89,12 @@ local function parse_weapon_info(slot_id, db)
 					end
 					if found_dmg and found_speed then break end
 				end
-				-- print(dmg_min, dmg_max, speed);
-				db[item_id_] = {dmg_min, dmg_max, speed};
+				-- Only cache COMPLETE entries.  A partial parse (e.g. item
+				-- info not loaded yet) must stay uncached so a later scan
+				-- retries, instead of poisoning the cache with nil fields.
+				if found_dmg and found_speed then
+					db[item_id_] = {dmg_min, dmg_max, speed};
+				end
 			end
 
 			tooltip_weapon:Hide();
@@ -99,10 +102,30 @@ local function parse_weapon_info(slot_id, db)
 	end
 end
 
+-- Validates a cached weapon entry.  Returns the entry when it is complete,
+-- nil otherwise; incomplete entries (written by older addon versions) are
+-- dropped from the cache so the next scan re-parses the tooltip.
+local function read_weapon_cache(db, item_id)
+	if item_id == nil or item_id == 0 then
+		return nil;
+	end
+	local weapon_data = db[item_id];
+	if weapon_data == nil then
+		-- not cached yet (tooltip parse failed); retry on a later event
+		return nil;
+	end
+	if weapon_data[1] == nil or weapon_data[2] == nil
+			or weapon_data[3] == nil or weapon_data[3] <= 0.05 then
+		db[item_id] = nil;
+		return nil;
+	end
+	return weapon_data;
+end
+
 local function update_ranged_weapon_stats()
     if fluffy.is_player_hunter == false then
 		return;
-	end    
+	end
 
 	fluffy.ranged_weapon_id = 0;
 	fluffy.ranged_dmg_min = 0;
@@ -121,7 +144,7 @@ local function update_ranged_weapon_stats()
 	parse_weapon_info(18, FluffyDBPC["ranged_weapons"]);
 
 	local item_string = GetInventoryItemLink("player",18);
-	
+
 	local i_ = 0;
 	local item_id = 0;
 	local enchant_id = 0;
@@ -133,31 +156,20 @@ local function update_ranged_weapon_stats()
 				enchant_id = tonumber(str);
 				break;
 			end
-			
+
 			i_ = i_ + 1;
 		end
 	end
 
-	if item_id == 0 then
+	local weapon_data = read_weapon_cache(FluffyDBPC["ranged_weapons"], item_id);
+	if weapon_data == nil then
 		return;
 	end
-	
-	local weapon_data = FluffyDBPC["ranged_weapons"][item_id];
 
-	if weapon_data ~= nil then
-		-- Guard against cached entries with zero or invalid speed which would
-		-- cause an infinite loop in the autoshot projection while-loop.
-		if weapon_data[3] == nil or weapon_data[3] <= 0.05 then
-			return;
-		end
-		fluffy.ranged_dmg_min = weapon_data[1];
-		fluffy.ranged_dmg_max = weapon_data[2];
-		fluffy.ranged_base_speed = weapon_data[3];
-		fluffy.ranged_weapon_id = item_id;
-	else
-		-- weapon_data is nil: not in cache yet, bail out safely.
-		return;
-	end
+	fluffy.ranged_dmg_min = weapon_data[1];
+	fluffy.ranged_dmg_max = weapon_data[2];
+	fluffy.ranged_base_speed = weapon_data[3];
+	fluffy.ranged_weapon_id = item_id;
 
 	local bonus_dmg = 0;
 	if enchant_id == 30 then
@@ -170,23 +182,17 @@ local function update_ranged_weapon_stats()
 		bonus_dmg = 5; -- deadly scope
 	elseif enchant_id == 664 then
 		bonus_dmg = 7; -- sniper scope
-	elseif enchant_id == 2523 then
-		fluffy.ranged_hit = 3;-- blitz scope
 	end
 
 	fluffy.ranged_dmg_min = fluffy.ranged_dmg_min + bonus_dmg;
 	fluffy.ranged_dmg_max = fluffy.ranged_dmg_max + bonus_dmg;
 	fluffy.ranged_dmg_avg = (fluffy.ranged_dmg_min + fluffy.ranged_dmg_max) / 2;
-
-	-- if item_id ~= nil then
-	-- 	print(FluffyDBPC["ranged_weapons"][item_id][1], FluffyDBPC["ranged_weapons"][item_id][2], FluffyDBPC["ranged_weapons"][item_id][3]);
-	-- end
 end
 
 local function update_melee_weapon_stats()
     if fluffy.is_player_hunter == false then
 		return;
-	end    
+	end
 
 	fluffy.melee_dmg_avg_main = 0;
 	fluffy.main_hand_base_speed = 1;
@@ -194,7 +200,7 @@ local function update_melee_weapon_stats()
 	fluffy.off_hand_base_speed = 1;
 	fluffy.melee_mh_weapon_id = 0;
 	fluffy.melee_oh_weapon_id = 0;
-		
+
 	if FluffyDBPC == nil then
 		FluffyDBPC = {};
 	end
@@ -211,41 +217,22 @@ local function update_melee_weapon_stats()
 	parse_weapon_info(17, FluffyDBPC["melee_weapons"]);
 	local item_id_oh = GetInventoryItemID("player", 17);
 
-	if item_id_mh ~= nil then
-		local weapon_data = FluffyDBPC["melee_weapons"][item_id_mh];
-		if weapon_data ~= nil then
-			fluffy.melee_dmg_avg_main = 0.5 * (weapon_data[1] + weapon_data[2]);
-			fluffy.main_hand_base_speed = weapon_data[3];
-			fluffy.melee_mh_weapon_id = item_id_mh;
-		elseif FluffyDBPC["melee_weapons"][item_id_mh][3]  <= 0.05 then
-			FluffyDBPC["melee_weapons"][item_id_mh] = nil;
-			-- update_melee_weapon_stats();
-			return;
-		end
+	local weapon_data = read_weapon_cache(FluffyDBPC["melee_weapons"], item_id_mh);
+	if weapon_data ~= nil then
+		fluffy.melee_dmg_avg_main = 0.5 * (weapon_data[1] + weapon_data[2]);
+		fluffy.main_hand_base_speed = weapon_data[3];
+		fluffy.melee_mh_weapon_id = item_id_mh;
 	end
 
-	if item_id_oh ~= nil then
-		local weapon_data = FluffyDBPC["melee_weapons"][item_id_oh];
-		if weapon_data ~= nil then
-			fluffy.melee_dmg_avg_off = 0.5 * (weapon_data[1] + weapon_data[2]);
-			fluffy.off_hand_base_speed = weapon_data[3];
-			fluffy.melee_oh_weapon_id = item_id_oh;
-		elseif FluffyDBPC["melee_weapons"][item_id_oh][3]  <= 0.05 then
-			FluffyDBPC["melee_weapons"][item_id_oh] = nil;
-			-- update_melee_weapon_stats();
-			return;
-		end
+	weapon_data = read_weapon_cache(FluffyDBPC["melee_weapons"], item_id_oh);
+	if weapon_data ~= nil then
+		fluffy.melee_dmg_avg_off = 0.5 * (weapon_data[1] + weapon_data[2]);
+		fluffy.off_hand_base_speed = weapon_data[3];
+		fluffy.melee_oh_weapon_id = item_id_oh;
 	end
-
-	-- if item_id_mh ~= nil then
-	-- 	print(FluffyDBPC["melee_weapons"][item_id_mh][1], FluffyDBPC["melee_weapons"][item_id_mh][2], FluffyDBPC["melee_weapons"][item_id_mh][3]);
-	-- end
-	-- if item_id_oh ~= nil then
-	-- 	print(FluffyDBPC["melee_weapons"][item_id_oh][1], FluffyDBPC["melee_weapons"][item_id_oh][2], FluffyDBPC["melee_weapons"][item_id_oh][3]);
-	-- end
 end
 
-function update_weapon_stats()
+function fluffy.update_weapon_stats()
 	update_ranged_weapon_stats();
 	update_melee_weapon_stats();
 end

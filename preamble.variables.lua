@@ -2,15 +2,12 @@ local _, fluffy = ...
 
 fluffy.is_casting_autoshot = false;
 
-fluffy.current_addon_version = 240;
+fluffy.current_addon_version = 250;
 fluffy.client_version = 0;
 fluffy.is_player_hunter = false;
 fluffy.player_id = nil;
 fluffy.last_update = 0;
 fluffy.time_loaded = 0;
-
-fluffy.display_mode = 0;
-
 
 fluffy.spell_id_aimed = 19434;
 fluffy.spell_id_multi = 2643;
@@ -75,7 +72,6 @@ fluffy.ranged_dmg_min = 0;
 fluffy.ranged_dmg_max = 0;
 fluffy.ranged_dmg_avg = 0;
 fluffy.ranged_base_speed = 0;
-fluffy.ranged_hit = 0;
 fluffy.ranged_weapon_id = 0;
 
 -- melee weapon stats
@@ -127,18 +123,30 @@ fluffy.latency_color_threshold_yellow = 0.1;  -- 100 ms one-way (200 ms RTT)
 -- ---------------------------------------------------------------------------
 -- Rotation mode (updated every frame from effective weapon speed)
 -- eWS = base_speed * haste_mod = cdb(t) + cast(t) = full attack period.
--- Based on diziet559.github.io/rotationtools thresholds:
---   eWS >= 2.5s  ->  "French"   (5:5:1:1 or 5:4:1:1 for SV)
---   1.7-2.5s     ->  "LongFrench" (5:6:1:1 with IAotH proc)
---   1.5-1.7s     ->  "Skipping"  (5:9:1:1 - RF + hawk)
---   1.3-1.5s     ->  "1:1"
---   0.94-1.3s    ->  "2:3"       (alternating 1:1 and 1:2 cycles)
---   0.75-0.94s   ->  "1:2"
---   0.62-0.75s   ->  "2:5"
---   < 0.62s      ->  "1:3"
+-- Bands are read from the best-rotation crossings in the BM and SV
+-- DPS-over-haste graphs on diziet559.github.io/rotationtools:
+--   eWS >= 2.4s (no Serpent's Swiftness) -> "ShortFrench" (5:4:1:1, SV base)
+--   eWS >= 1.95s ->  "French"     (5:5:1:1 - BM base / SV with Hawk proc)
+--   1.65-1.95s   ->  "LongFrench" (5:6:1:1 - BM with Hawk proc)
+--   1.45-1.65s   ->  "1:1"        (BM with RF or Lust)
+--   1.05-1.45s   ->  "Skipping"   (5:9:1:1 - BM RF+Hawk or RF+Lust)
+--   0.85-1.05s   ->  "2:3"        (BM RF+Hawk+Lust)
+--   0.70-0.85s   ->  "1:2"        (BM RF+Lust+Pot)
+--   0.62-0.70s   ->  "2:5"        (BM RF+(Hawk|DST)+Lust+Pot)
+--   < 0.62s      ->  "1:3"        (full stacking, beyond P1 reach)
+-- The derivation lives in recommendation_calculation.lua
+-- (fluffy.derive_rotation_mode) and is verified by the offline harness.
 -- ---------------------------------------------------------------------------
 fluffy.rotation_mode = "French";
 fluffy.rotation_ews  = 0;
+
+-- Time budget for one full melee weave (step in, swing, step out).  The
+-- rotation overview: "Even slow weavers will manage to stay below 0.4
+-- seconds weaving time".  Melee windows are clipped so a weave started
+-- inside [aim_start - weave_time - latency_rtt, fire] is never suggested,
+-- because moving during the 0.5 s aim delays the auto shot and ranged
+-- damage has priority over weaving.
+fluffy.weave_time = 0.4;
 
 -- Set to true by combat log handlers when next_start changes.
 -- The gui_Update loop checks this and forces an immediate logic
