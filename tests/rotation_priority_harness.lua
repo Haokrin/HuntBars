@@ -148,6 +148,10 @@ end
 local function check_priority_properties(label, t)
     local sWs, sWe = fluffy.ability_steadyshot["windows_s"], fluffy.ability_steadyshot["windows_e"];
     local horizon = t + 3.4;  -- visible bar range
+    -- GCD spillover allowance: up to one gap's idle GCD time may be
+    -- borrowed (the French band's "slightly delays the auto shots");
+    -- zero at 1:1 speeds where the strict rule must hold.
+    local slack = math.max(0, fluffy.rotation_ews - GCD);
 
     for _, low in ipairs({fluffy.ability_multishot, fluffy.ability_arcaneshot}) do
         local lWs, lWe = low["windows_s"], low["windows_e"];
@@ -162,16 +166,17 @@ local function check_priority_properties(label, t)
                         label, low["name"], lWs[i], lWe[i], sWs[j], sWe[j]));
                 end
             end
-            -- (2) GCD safety at the worst press time (window end)
+            -- (2) GCD safety at the worst press time (window end): the GCD
+            -- may push the next steady past its deadline by at most slack
             local x = math.min(lWe[i], horizon);
             if x >= lWs[i] then
                 for j = 1, #sWs do
                     if sWe[j] > x then
-                        if x + GCD > sWe[j] + 1e-6 then
+                        if x + GCD > sWe[j] + slack + 1e-6 then
                             failures = failures + 1;
                             print(string.format(
-                                "FAIL  %s: %s press at %.3f + GCD ends %.3f, past steady deadline %.3f",
-                                label, low["name"], x, x + GCD, sWe[j]));
+                                "FAIL  %s: %s press at %.3f + GCD ends %.3f, past steady deadline %.3f + slack %.3f",
+                                label, low["name"], x, x + GCD, sWe[j], slack));
                         end
                         break;
                     end
@@ -183,12 +188,14 @@ local function check_priority_properties(label, t)
 end
 
 -- =====================================================================
--- Scenario A: eWS 3.0 (French rotation), fresh auto fire.
+-- Scenario A: eWS 3.0 (slowest band), fresh auto fire.
 -- Fire at 10.5 (aim 10.0..10.5), evaluated at t = 10.6.
 -- Expected first-gap tiling (aim start of next auto = 13.0):
 --   steady [10.6 .. 11.42]   (13.0 - 1.5 cast - 0.08 RTT)
 --   multi  [11.42 .. 12.42]  (13.0 - 0.5 cast - 0.08 RTT)
---   arcane [12.42 .. 12.92]  (next steady deadline 14.42 - 1.5 GCD)
+--   arcane [12.42 .. 13.0]   (instant; up to the aim start — the GCD
+--                             reservation is non-binding here because the
+--                             per-gap slack 1.5 covers the spillover)
 -- =====================================================================
 now = 10.0;  combat_log_payload = {now, "SPELL_CAST_START", nil, "guid-player",
     nil, nil, nil, nil, nil, nil, nil, 75, "Auto Shot", nil};
@@ -207,7 +214,7 @@ check("A: steady deadline = aim - cast - RTT",        sWe[1], 11.42, 1e-6);
 check("A: multi opens at steady deadline",            mWs[1], 11.42, 1e-6);
 check("A: multi deadline = aim - cast - RTT",         mWe[1], 12.42, 1e-6);
 check("A: arcane opens at multi deadline",            aWs[1], 12.42, 1e-6);
-check("A: arcane deadline = next steady deadline - GCD", aWe[1], sWe[2] - GCD, 1e-6);
+check("A: arcane extends to the aim start",           aWe[1], 13.0, 1e-6);
 check_priority_properties("A", now);
 
 -- =====================================================================
@@ -343,6 +350,32 @@ check("F: second raptor window resumes at the auto fire time",
       rWs[2], first_fire, 1e-6);
 fluffy.ability_raptorstrike["known"] = false;
 fluffy.melee_mh_weapon_id = 0;
+
+-- =====================================================================
+-- Scenario G: BM-base French band (eWS 2.17).  Regression for "arcane
+-- never appears between two autos under the French rotation": the strict
+-- GCD reservation (next steady deadline - 1.5) empties arcane at every
+-- eWS below ~2.25, but the reference 5:5:1:1 cycle includes one arcane —
+-- the rotation absorbs the GCD spillover as a micro auto delay.  With
+-- the per-gap slack allowance the gap must tile as
+--   auto -> steady -> multi -> arcane -> auto.
+-- =====================================================================
+setup_cycle_state(2.17, 0.05, 7000);
+now = 7000;
+fluffy.analyze_game_state(3, now);
+
+local gWs, gWe = fluffy.ability_arcaneshot["windows_s"], fluffy.ability_arcaneshot["windows_e"];
+local gmWe = fluffy.ability_multishot["windows_e"];
+assert(#gWs >= 1, "expected an arcane window in the French gap");
+check("G: French arcane opens at the multi deadline",
+      gWs[1], gmWe[1], 1e-6);
+check("G: French arcane extends to the aim start",
+      gWe[1], fluffy.ability_autoshot["next_start"], 1e-6);
+-- the strict rule (no slack) would have emptied this window entirely
+local g_next_steady_deadline = fluffy.ability_steadyshot["windows_e"][2];
+assert(g_next_steady_deadline - GCD < gWs[1],
+       "strict reservation must be binding at this speed for the regression to be meaningful");
+check_priority_properties("G", now);
 
 -- ---------------------------------------------------------------------------
 print("");
