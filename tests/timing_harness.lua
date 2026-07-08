@@ -92,7 +92,7 @@ fluffy.ranged_base_speed = 3.0;
 fluffy.ranged_weapon_id = 42;
 fluffy.ranged_dmg_avg = 200;
 fluffy.ability_steadyshot["known"] = true;
-InitDB();
+fluffy.InitDB();
 
 -- pin latency to known values for deterministic assertions
 -- (one-way 40 ms, RTT 80 ms; refresh_latency is disabled via last_check)
@@ -144,7 +144,7 @@ check("fire: aim model = 0.5 * speed / base",
 
 -- (2) Steady Shot safe-press deadline ---------------------------------------
 now = 10.3;
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 
 local ws = fluffy.ability_steadyshot["windows_s"];
 local we = fluffy.ability_steadyshot["windows_e"];
@@ -182,7 +182,7 @@ check("steady window 2 opens at previous auto fire",
 now = 10.5;
 api_ranged_speed = 1.5 * 1.15;
 haste_rating_ranged = 1577 / 1.15 / (2.0 / 1.15 - 1);  -- keep table mod consistent
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 
 check("rescale: next_fired remaining scaled by new/old speed",
       fluffy.ability_autoshot["next_fired"], 10.5 + (11.75 - 10.5) * 1.15, 1e-6);
@@ -192,7 +192,7 @@ check("rescale: next_start remaining scaled by new/old speed",
 local nf_before, ns_before =
     fluffy.ability_autoshot["next_fired"], fluffy.ability_autoshot["next_start"];
 now = 10.6;
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 check("rescale idempotent: next_fired unchanged on stable speed",
       fluffy.ability_autoshot["next_fired"], nf_before, 1e-9);
 check("rescale idempotent: next_start unchanged on stable speed",
@@ -201,14 +201,14 @@ check("rescale idempotent: next_start unchanged on stable speed",
 -- (4) cast pushback into the prediction -------------------------------------
 now = 10.7;
 casting_info = {"Steady Shot", 12000};  -- cast ends at t = 12.0 (> next_start)
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 check("pushback: next_start moves to cast end",
       fluffy.ability_autoshot["next_start"], 12.0, 1e-6);
 check("pushback: next_fired shifted by the same delay",
       fluffy.ability_autoshot["next_fired"], nf_before + (12.0 - ns_before), 1e-6);
 
 now = 10.8;
-analyze_game_state(3, now);
+fluffy.analyze_game_state(3, now);
 check("pushback idempotent while the same cast is in progress",
       fluffy.ability_autoshot["next_start"], 12.0, 1e-6);
 casting_info = nil;

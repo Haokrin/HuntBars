@@ -12,9 +12,9 @@ local function get_arrow_dps(tooltip_text)
 	local out = 0;
 
 	if tooltip_text ~= nil then
-		local splt = mysplit_speed(tooltip_text);
+		local splt = fluffy.mysplit_speed(tooltip_text);
 
-		for i = 1,table.getn(splt) do
+		for i = 1,#splt do
 			local val = tonumber(splt[i]);
 
 			if val ~= nil then
@@ -27,7 +27,7 @@ local function get_arrow_dps(tooltip_text)
 	return out;
 end
 
-function update_ammo_stats()
+function fluffy.update_ammo_stats()
     if fluffy.is_player_hunter == false then
 		return;
 	end    
@@ -45,7 +45,7 @@ function update_ammo_stats()
 
 	if item_id ~= nil and item_id ~= 0 then
 		if FluffyDBPC["ammo"][item_id] == nil then
-			local itemName, itemLink = GetItemInfo(item_id);
+			local _, itemLink = GetItemInfo(item_id);
 		
 			tooltip_ammo:ClearLines()
 			tooltip_ammo:SetOwner(WorldFrame, "ANCHOR_NONE");
@@ -64,7 +64,10 @@ function update_ammo_stats()
 			tooltip_ammo:Hide();
 		end
 
-		fluffy.ammo_dps = FluffyDBPC["ammo"][item_id];
+		-- The cache entry stays nil when the tooltip parse failed (e.g.
+		-- GetItemInfo not loaded yet); keep 0 and retry on a later event
+		-- instead of poisoning ammo_dps with nil.
+		fluffy.ammo_dps = FluffyDBPC["ammo"][item_id] or 0;
 	end
 
 end
@@ -84,16 +87,16 @@ local function get_bag_haste(line)
 		return out;
 	end
 
-	local splt = mysplit_speed(line);
-	for i = 1,table.getn(splt) do
-		local val = get_percent(splt[i]);
+	local splt = fluffy.mysplit_speed(line);
+	for i = 1,#splt do
+		local val = fluffy.get_percent(splt[i]);
 		out = max(out, val);
 	end	
 	
 	return out;
 end
 
-function update_quiver_haste()
+function fluffy.update_quiver_haste()
     if fluffy.is_player_hunter == false then
 		return;
 	end    
@@ -113,7 +116,7 @@ function update_quiver_haste()
 
 		if item_id ~= nil then
 			if FluffyDBPC["quiver"][item_id] == nil then
-				local itemName, itemLink = GetItemInfo(item_id);
+				local _, itemLink = GetItemInfo(item_id);
 		
 				tooltip_quiver:ClearLines()
 				tooltip_quiver:SetOwner(WorldFrame, "ANCHOR_NONE");
@@ -132,8 +135,9 @@ function update_quiver_haste()
 	
 				tooltip_quiver:Hide();
 			end
-		
-			fluffy.quiver_haste = max(fluffy.quiver_haste, FluffyDBPC["quiver"][item_id]);
+
+			-- nil when the tooltip parse failed; treat as 0 and retry later.
+			fluffy.quiver_haste = max(fluffy.quiver_haste, FluffyDBPC["quiver"][item_id] or 0);
 		end
 
 	end

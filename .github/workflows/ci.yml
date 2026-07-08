@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Lua 5.1 and luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.1 lua-check
+
+      - name: Timing harness
+        run: lua5.1 tests/timing_harness.lua
+
+      - name: Rotation priority harness
+        run: lua5.1 tests/rotation_priority_harness.lua
+
+      - name: Luacheck
+        run: luacheck . --no-color -q

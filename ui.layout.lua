@@ -4,9 +4,9 @@ local _, fluffy = ...
 -- Icon visibility
 -- Toggles the small spell icons that sit on top of each ability bar.
 -- ---------------------------------------------------------------------------
-function update_bar_icon_visibility()
+function fluffy.update_bar_icon_visibility()
     if (FluffyDBPC == nil) then
-        InitDB();
+        fluffy.InitDB();
     end
 
     local show_icons = FluffyDBPC["show_icons"][1];
@@ -24,33 +24,23 @@ end
 -- Overall frame visibility
 -- Hides or shows every UI element based on FluffyDBPC["hidden"].
 -- ---------------------------------------------------------------------------
-function update_visibility()
+function fluffy.update_visibility()
 
 	if FluffyDBPC == nil then
-		InitDB();
+		fluffy.InitDB();
 	end
 
 
 	if FluffyDBPC["hidden"][1] then
 
 		FluffyBar:Hide();
-		FluffyBars_icon_background:Hide();
 
         for i=1,#FluffyBars_bars do
             FluffyBars_bars[i]:Hide();
         end
-        for i=1,#FluffyBars_icons do
-            FluffyBars_icons[i]:Hide();
-        end
-        for i=1,#FluffyBars_icon_glows do
-            FluffyBars_icon_glows[i]:Hide();
-        end
 
         for i=1,#FluffyBars_autoshotsparks do
             FluffyBars_autoshotsparks[i]:Hide();
-        end
-        for i=1,#FluffyBars_autoshotmovements do
-            FluffyBars_autoshotmovements[i]:Hide();
         end
 	else
 		if fluffy.is_player_hunter == false then
@@ -59,36 +49,13 @@ function update_visibility()
 
 
 		FluffyBar:Show();
-		FluffyBars_icon_background:Hide();
 
         for i=1,#FluffyBars_bars do
             FluffyBars_bars[i]:Hide();
         end
-        for i=1,#FluffyBars_icons do
-            FluffyBars_icons[i]:Hide();
-        end
-        for i=1,#FluffyBars_icon_glows do
-            FluffyBars_icon_glows[i]:Hide();
-        end
 
         for i=1,#FluffyBars_autoshotsparks do
             FluffyBars_autoshotsparks[i]:Hide();
-        end
-        for i=1,#FluffyBars_autoshotmovements do
-            FluffyBars_autoshotmovements[i]:Hide();
-        end
-
-		if FluffyDBPC["icosize"][1] > 0 then
-            -- icon frames intentionally kept hidden for now
-        else
-            FluffyBars_icon_background:Hide();
-
-            for i=1,#FluffyBars_icons do
-                FluffyBars_icons[i]:Hide();
-            end
-            for i=1,#FluffyBars_icon_glows do
-                FluffyBars_icon_glows[i]:Hide();
-            end
         end
 	end
 end
@@ -97,13 +64,13 @@ end
 -- Position
 -- Applies saved anchor position to the main bar frame.
 -- ---------------------------------------------------------------------------
-function update_position()
+function fluffy.update_position()
 	if fluffy.is_player_hunter == false then
 		return;
 	end
 
 	if FluffyDBPC == nil then
-		InitDB();
+		fluffy.InitDB();
 	end
 
     FluffyBar:SetPoint(FluffyDBPC["pos"][1], FluffyDBPC["pos"][2], FluffyDBPC["pos"][3]);
@@ -114,13 +81,13 @@ end
 -- Resizes the main bar, spark frames, and ability bar frames.
 -- Also refreshes position and visibility after a resize.
 -- ---------------------------------------------------------------------------
-function update_size()
+function fluffy.update_size()
 	if not fluffy.is_player_hunter then
 		return;
 	end
 
 	if FluffyDBPC == nil then
-		InitDB();
+		fluffy.InitDB();
 	end
 
 	FluffyBar:SetSize(FluffyDBPC["size"][1], FluffyDBPC["size"][2]);
@@ -128,12 +95,9 @@ function update_size()
     for i=1,#FluffyBars_autoshotsparks do
         FluffyBars_autoshotsparks[i]:SetSize(FluffyDBPC["spark_width"], FluffyDBPC["size"][2] - 5);
     end
-    for i=1,#FluffyBars_autoshotmovements do
-        FluffyBars_autoshotmovements[i]:SetSize(1, FluffyDBPC["size"][2] - 5);
-    end
 
     -- Ranged abilities use the full bar height; melee uses the bottom half.
-    local h_ = 0;
+    local h_;
     if FluffyDBPC["consider_melee"][1] == false then
         h_ = (FluffyDBPC["size"][2] - 5);
     else
@@ -146,8 +110,8 @@ function update_size()
         end
     end
 
-	update_position();
-	update_visibility();
+	fluffy.update_position();
+	fluffy.update_visibility();
 end
 
 -- ---------------------------------------------------------------------------

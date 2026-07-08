@@ -1,7 +1,5 @@
 local _, fluffy = ...
 
-local last_update = 0;
-
 fluffy.autoshot_sparks = {};
 local show_steady = false;
 local show_multi = false;
@@ -9,9 +7,7 @@ local show_arcane = false;
 
 local function get_point_of_equilibrium_autoshot(A, ats, ate)
 
-    local h = (ate - ats) * 2;
     local d_A = A["dmg"]();
-    local cd_A = A["cd"](ats);
 
     local cast_A = A["cast"](ats);
     local cdb_A = A["cdb"](ats);
@@ -29,10 +25,6 @@ local function get_point_of_equilibrium_autoshot(A, ats, ate)
 
     return (ate * dps_A - (cast_A - ats) * dps_auto)/(dps_auto + dps_A);
 end
-
--- local function get_point_of_equilibrium(A_dmg, B_dmg, A_cast, B_cast)
---     return (A_dmg*(B_cast)-fluffy.recommendation_tolerance*B_dmg*(A_cast))/(fluffy.recommendation_tolerance*B_dmg + A_dmg);
--- end
 
 -- Steady/Multi/Arcane all trigger the standard 1.5 s global cooldown
 -- (the ranged GCD is not reduced by haste in TBC).
@@ -123,12 +115,12 @@ local function optimize_towards_autoshot()
         wipe(intervals_abilities_starts[A]);
         wipe(intervals_abilities_ends[A]);
 
-        for k, v in pairs(intervals_abilities_starts_tmp) do
-            table.insert(intervals_abilities_starts[A], v);
+        for _, tmp_val in ipairs(intervals_abilities_starts_tmp) do
+            table.insert(intervals_abilities_starts[A], tmp_val);
         end
 
-        for k, v in pairs(intervals_abilities_ends_tmp) do
-            table.insert(intervals_abilities_ends[A], v);
+        for _, tmp_val in ipairs(intervals_abilities_ends_tmp) do
+            table.insert(intervals_abilities_ends[A], tmp_val);
         end
 
         wipe(intervals_abilities_starts_tmp);
@@ -170,12 +162,12 @@ local function set_minus(A, ts_B, te_B)
     wipe(intervals_abilities_starts[A]);
     wipe(intervals_abilities_ends[A]);
 
-    for k, v in pairs(intervals_abilities_starts_tmp) do
-        table.insert(intervals_abilities_starts[A], v);
+    for _, tmp_val in ipairs(intervals_abilities_starts_tmp) do
+        table.insert(intervals_abilities_starts[A], tmp_val);
     end
 
-    for k, v in pairs(intervals_abilities_ends_tmp) do
-        table.insert(intervals_abilities_ends[A], v);
+    for _, tmp_val in ipairs(intervals_abilities_ends_tmp) do
+        table.insert(intervals_abilities_ends[A], tmp_val);
     end
 
     wipe(intervals_abilities_starts_tmp);
@@ -209,9 +201,8 @@ local function optimize_intervals_simple()
 
     -- calculating disjoint intervals
     local idx = 1;
-    for B, ints_B in pairs(intervals_abilities_starts) do 
+    for B, _ in pairs(intervals_abilities_starts) do
         local dmg_B = B["dmg"]();
-        local ints_B_tmp = intervals_abilities_ends[B];
         table.insert(ability_priority_dmg, dmg_B);
         table.insert(ability_priority_abilities, B);
         table.insert(ability_priority_indices, idx);
@@ -236,10 +227,10 @@ local function optimize_intervals_simple()
 
             local A = ability_priority_abilities[j];
 
-            for i=1,#ints_B_s do
-                local ts_B = ints_B_s[i];
-                local te_B = ints_B_e[i];
-    
+            for b=1,#ints_B_s do
+                local ts_B = ints_B_s[b];
+                local te_B = ints_B_e[b];
+
                 set_minus(A, ts_B, te_B);
             end
         end
@@ -303,16 +294,38 @@ local function optimize_intervals_simple()
     wipe(ability_priority_indices);
 end
 
--- local function clip_interval_starts()
--- 	for A, _ in pairs(intervals_abilities_starts) do
--- 		for B, _ in pairs(intervals_abilities_starts) do
--- 			if A ~= B then
--- 				clip_intervals_abilities(A, B);
--- 			end
--- 		end
--- 	end
--- end
-
+-- ---------------------------------------------------------------------------
+-- Weave-aware melee windows.  Per the rotation overview, ranged damage has
+-- priority over weaving: a weave (step in, swing, step out) takes up to
+-- fluffy.weave_time, and moving during the 0.5 s aim delays the auto shot.
+-- A weave started later than
+--     aim_start - weave_time - latency_rtt
+-- therefore risks clipping the incoming auto.  This helper inserts the
+-- pieces of the melee window [ts, te] that survive after removing that
+-- blocked region in front of every predicted auto shot; each window
+-- resumes at the fire time.
+-- ---------------------------------------------------------------------------
+local function insert_weave_safe_windows(A, ts, te)
+    for k = 1, #fluffy.autoshot_sparks do
+        local fire = fluffy.autoshot_sparks[k];
+        local blocked_from = fire - fluffy.ability_autoshot["cast"](fire)
+                             - fluffy.weave_time - fluffy.latency_rtt;
+        if blocked_from > te then
+            break;  -- sparks ascend; later autos cannot clip this window
+        end
+        if fire > ts then
+            if ts < blocked_from - 0.005 then
+                table.insert(A["windows_s"], ts);
+                table.insert(A["windows_e"], blocked_from);
+            end
+            ts = max(ts, fire);
+        end
+    end
+    if ts < te - 0.005 then
+        table.insert(A["windows_s"], ts);
+        table.insert(A["windows_e"], te);
+    end
+end
 
 local function analyze_windows_of_opportunities_experimental(abilities, window_length)
 
@@ -358,37 +371,27 @@ local function analyze_windows_of_opportunities_experimental(abilities, window_l
         end
     end
     
-    if fluffy.ability_raptorstrike["known"] then
+    if fluffy.ability_raptorstrike["known"] and fluffy.melee_mh_weapon_id > 0 then
         local cd_raptor = max(fluffy.cast_finishes, max(t + fluffy.ability_raptorstrike["cd"](t), t));
         local cd_melee = max(fluffy.cast_finishes, max(t + fluffy.ability_meleestrike["cd"](t), t));
-        -- print(cd_melee - t);
 
-        if fluffy.melee_mh_weapon_id > 0 then
-            if (cd_melee < cd_raptor) then
+        if (cd_melee < cd_raptor) then
 
-                if (IsUsableSpell(fluffy.ability_raptorstrike["active_id"])) then
-                    table.insert(fluffy.ability_meleestrike["windows_s"], cd_melee);
-                    table.insert(fluffy.ability_meleestrike["windows_e"], cd_raptor);
-        
-                    
-                    table.insert(fluffy.ability_raptorstrike["windows_s"], cd_raptor);
-                    table.insert(fluffy.ability_raptorstrike["windows_e"], cd_raptor + 25);
-                else
-                    table.insert(fluffy.ability_meleestrike["windows_s"], cd_melee);
-                    table.insert(fluffy.ability_meleestrike["windows_e"], cd_melee + 25);
-                end
+            if (IsUsableSpell(fluffy.ability_raptorstrike["active_id"])) then
+                insert_weave_safe_windows(fluffy.ability_meleestrike, cd_melee, cd_raptor);
+                insert_weave_safe_windows(fluffy.ability_raptorstrike, cd_raptor, cd_raptor + 25);
             else
-                if (IsUsableSpell(fluffy.ability_raptorstrike["active_id"])) then
-                    table.insert(fluffy.ability_raptorstrike["windows_s"], cd_raptor);
-                    table.insert(fluffy.ability_raptorstrike["windows_e"], cd_raptor + 25);
-                else
-                    table.insert(fluffy.ability_meleestrike["windows_s"], cd_melee);
-                    table.insert(fluffy.ability_meleestrike["windows_e"], cd_melee + 25);
-                end
+                insert_weave_safe_windows(fluffy.ability_meleestrike, cd_melee, cd_melee + 25);
+            end
+        else
+            if (IsUsableSpell(fluffy.ability_raptorstrike["active_id"])) then
+                insert_weave_safe_windows(fluffy.ability_raptorstrike, cd_raptor, cd_raptor + 25);
+            else
+                insert_weave_safe_windows(fluffy.ability_meleestrike, cd_melee, cd_melee + 25);
             end
         end
     end
-    
+
     wipe(intervals_autoshot_starts);
     wipe(intervals_autoshot_ends);
     for k,v in pairs(intervals_abilities_starts) do
@@ -434,25 +437,34 @@ end
 -- ---------------------------------------------------------------------------
 -- Rotation-mode derivation (diziet559.github.io/rotationtools)
 -- ---------------------------------------------------------------------------
--- Thresholds are taken directly from the DPS graphs on that page.
+-- Bands are read from the best-rotation crossings in the BM and SV
+-- DPS-over-haste graphs on that page (rotations_bm.png / rotations_sv.png,
+-- both drawn for the 2.9-speed Sunfury bow).  Anchor points, as eWS:
+--   SV base (quiver only)             2.52  ->  Short French (5:4:1:1)
+--   BM base ("reg")                   2.10  ->  French (5:5:1:1)
+--   BM + Hawk proc                    1.83  ->  Long French (5:6:1:1)
+--   BM + Lust / BM + RF          1.62/1.50  ->  1:1
+--   BM + RF+Hawk / RF+Lust       1.40-1.08  ->  Skipping (5:9:1:1)
+--   BM + RF + Hawk + Lust             0.94  ->  2:3
+--   BM + RF + Lust + Pot              0.83  ->  1:2
+--   BM + RF+(Hawk|DST)+Lust+Pot       0.72  ->  2:5
+--   full stacking                   < 0.62  ->  1:3
 -- eWS = cdb(t) + cast(t) = base_speed * haste_mod = full attack period.
---
---   eWS >= 2.5   French (5:5:1:1) or Short French (5:4:1:1) for SV
---   1.7–2.5      Long French (5:6:1:1) — IAotH proc or minor haste buffs
---   1.5–1.7      Skipping (5:9:1:1)   — RF + Hawk or RF + BL
---   1.3–1.5      1:1
---   0.94–1.3     2:3  (alternating 1:1 / 1:2 cycles, RF+BL range)
---   0.75–0.94    1:2
---   0.62–0.75    2:5  (1:2 / 1:3 mix, extreme haste only)
---   < 0.62       1:3  (not realistically reachable in P1)
---
-local function derive_rotation_mode(ews)
-    if     ews >= 2.5  then return "French";
-    elseif ews >= 1.7  then return "LongFrench";
-    elseif ews >= 1.5  then return "Skipping";
-    elseif ews >= 1.3  then return "1:1";
-    elseif ews >= 0.94 then return "2:3";
-    elseif ews >= 0.75 then return "1:2";
+-- Exposed on the fluffy namespace so the offline harness can verify the
+-- label at each of the anchor points above.
+function fluffy.derive_rotation_mode(ews)
+    if ews >= 1.95 then
+        -- The Short French (5:4:1:1) only ever wins without the 20% haste
+        -- from Serpent's Swiftness (survival builds) at base haste.
+        if fluffy.serpent_swiftness <= 1.001 and ews >= 2.4 then
+            return "ShortFrench";
+        end
+        return "French";
+    elseif ews >= 1.65 then return "LongFrench";
+    elseif ews >= 1.45 then return "1:1";
+    elseif ews >= 1.05 then return "Skipping";
+    elseif ews >= 0.85 then return "2:3";
+    elseif ews >= 0.70 then return "1:2";
     elseif ews >= 0.62 then return "2:5";
     else                    return "1:3";
     end
@@ -460,18 +472,6 @@ end
 
 local abilities_to_consider = {};
 
--- local function can_consider_melee(mode)
---     -- if mode == 0 then
---     --     return false;
---     -- elseif mode == 1 then
---     --     return true;
---     -- else
---     --     if IsItemInRange(8149, "target") and UnitExists("target") and UnitIsVisible("target") and UnitCanAttack("player", "target") and (not UnitIsDead("target")) then
---     --         return true;
---     --     end
---     -- end
---     return false;
--- end
 -- A cast or channel in progress blocks the pending auto shot: the server
 -- will not begin the 0.5s aim until the cast completes.  When the cast is
 -- going to end after the predicted aim start, fold that pushback into
@@ -489,20 +489,13 @@ local function push_autoshot_to_cast_end(cast_end)
     end
 end
 
-local last_time_moved = 0;
-function analyze_game_state(window_len, t)
+function fluffy.analyze_game_state(window_len, t)
 
     if intervals_abilities_starts[fluffy.ability_autoshot] == nil then
         initialize_intervals();
     end
     -- t is passed in from gui_Update so logic and render share one timestamp.
-    -- The throttle is now handled entirely by gui_Update (last_logic_update).
     t = t or GetTime();
-    -- local name, text, texture, startTime, endTime, isTradeSkill, castID, spellID = CastingInfo();
-    -- if name ~= nil then
-    --     print(startTime/1000 - fluffy.cast_finishes, endTime/1000 - fluffy.cast_finishes);
-    -- end
-    
 
     wipe(fluffy.ability_autoshot["windows_s"]);
     wipe(fluffy.ability_aimedshot["windows_s"]);
@@ -521,8 +514,8 @@ function analyze_game_state(window_len, t)
     wipe(fluffy.autoshot_sparks);
     if fluffy.is_player_hunter == false or fluffy.ranged_weapon_id == 0 then
 		return;
-	end    
-    update_player_stats();
+	end
+    fluffy.update_player_stats();
 
     -- Refresh cached latency reading (throttled to once per 0.5 s)
     refresh_latency();
@@ -575,7 +568,7 @@ function analyze_game_state(window_len, t)
         fluffy.swing_speed_snapshot = new_ews;
 
         fluffy.rotation_ews  = new_ews;
-        fluffy.rotation_mode = derive_rotation_mode(new_ews);
+        fluffy.rotation_mode = fluffy.derive_rotation_mode(new_ews);
     end
 
     local spell, _, _, _, endTime = UnitCastingInfo("player");
@@ -655,18 +648,6 @@ function analyze_game_state(window_len, t)
         table.insert(fluffy.autoshot_sparks, autoshot_shift);
     end
 
-
-    -- if fluffy.ability_aimedshot["known"] and IsUsableSpell(fluffy.ability_aimedshot["active_id"]) then
-    --     table.insert(abilities_to_consider, fluffy.ability_aimedshot);
-    -- end
-
-    -- if fluffy.ability_meleestrike["known"] and can_consider_melee(fluffy.ability_meleestrike["forbid"]) then
-    --     table.insert(abilities_to_consider, fluffy.ability_meleestrike);
-    -- end
-
-    -- if fluffy.ability_raptorstrike["known"] and (can_consider_melee(fluffy.ability_raptorstrike["forbid"]) and IsUsableSpell(fluffy.ability_raptorstrike["active_id"])) then
-    --     table.insert(abilities_to_consider, fluffy.ability_raptorstrike);
-    -- end
     -- Evaluate mana availability FIRST, then decide what to show.
     -- Previously show_* was set using low_mana_* before IsUsableSpell() had
     -- assigned them, meaning they were always nil (falsy) on the first check.
@@ -709,21 +690,6 @@ function analyze_game_state(window_len, t)
         table.insert(abilities_to_consider, fluffy.ability_steadyshot);
     end
 
-    -- print(fluffy.ability_arcaneshot["dmg"]());
-    -- print(fluffy.ability_steadyshot["dmg"]());
-    -- print("---");
-
-    -- if fluffy.ability_autoshot["known"] and IsUsableSpell(fluffy.ability_autoshot["active_id"]) then
-    --     table.insert(abilities_to_consider, fluffy.ability_autoshot);
-    -- end
-
-    -- table.insert(fluffy.ability_arcaneshot["windows_s"], 0);
-    -- table.insert(fluffy.ability_arcaneshot["windows_e"], t + 5*window_len);
-
-    
-    -- local tinit = GetTime();
-    -- analyze_windows_of_opportunities_cd(abilities_to_consider, t, t + 5*window_len);
     analyze_windows_of_opportunities_experimental(abilities_to_consider, 2*window_len);
-    -- print(GetTime() - tinit);
     wipe(abilities_to_consider);
 end

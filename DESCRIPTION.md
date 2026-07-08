@@ -2,7 +2,7 @@
 
 ## Overview
 
-Fluffy Hunter Bars is a World of Warcraft (TBC / WotLK Classic, Interface 20504) addon designed specifically for **Hunter** players. It provides real-time visual cast bar recommendations that tell the player exactly when to use each ability in order to maximize single-target DPS, based on best-practice rotation theory from the hunter community and the [Rotation Tools](https://diziet559.github.io/rotationtools/) resource.
+Fluffy Hunter Bars is a World of Warcraft (TBC Classic, Interface 20504) addon designed specifically for **Hunter** players. It provides real-time visual cast bar recommendations that tell the player exactly when to use each ability in order to maximize single-target DPS, based on best-practice rotation theory from the hunter community and the [Rotation Tools](https://diziet559.github.io/rotationtools/) resource.
 
 ## What It Does
 
@@ -13,22 +13,25 @@ The addon continuously analyzes the player's current game state — including au
 - **Steady Shot** (orange) — Shows when to weave Steady Shot between auto shots without clipping. When Multi-Shot is off cooldown the window takes Multi-Shot's color instead: press Multi-Shot there in place of the Steady (per Rotation Tools, a Multi-Shot should replace a Steady whenever it is off cooldown — its shorter cast always fits inside a steady window).
 - **Multi-Shot** (blue) — Shows extra windows where a Multi-Shot fits *around* the Steady Shot weave: its cast finishes before the incoming auto shot and its global cooldown cannot push the next Steady Shot past its deadline.
 - **Arcane Shot** (purple) — Shows windows where neither a Steady Shot nor a Multi-Shot fits; only appears when firing it cannot cost a Steady Shot (per the Rotation Tools guidance to cast Multi/Arcane only where a Steady cannot fit).
-- **Raptor Strike** (green) — Shows Raptor Strike availability when in melee range.
+- **Raptor Strike** (green) — Shows when Raptor Strike is available while a melee weapon is equipped and melee recommendations are enabled. (The addon does not check melee range; it shows the timing windows.)
 - **Melee Auto Attack** (grey) — Tracks melee swing timer when a melee weapon is equipped.
 
-### Rotation Mode Detection
-The addon automatically detects your current rotation mode based on your effective weapon speed (eWS), supporting all standard hunter rotations:
+Melee windows are **weave-aware**: per Rotation Tools, ranged damage has priority over weaving, so the addon removes the region before each predicted auto shot (aim start minus weave time minus latency) from every melee window — a recommended weave can never clip an auto shot. The weave allowance is 0.4 s ("even slow weavers will manage to stay below 0.4 seconds").
 
-| Effective Weapon Speed | Rotation Mode |
-|------------------------|---------------|
-| >= 2.5s | French (5:5:1:1) |
-| 1.7 - 2.5s | Long French (5:6:1:1) |
-| 1.5 - 1.7s | Skipping (5:9:1:1) |
-| 1.3 - 1.5s | 1:1 |
-| 0.94 - 1.3s | 2:3 |
-| 0.75 - 0.94s | 1:2 |
-| 0.62 - 0.75s | 2:5 |
-| < 0.62s | 1:3 |
+### Rotation Mode Detection
+The addon automatically detects your current rotation mode based on your effective weapon speed (eWS). The bands are read from the best-rotation crossings in the Rotation Tools DPS-over-haste graphs:
+
+| Effective Weapon Speed | Rotation Mode | Typical haste state (BM) |
+|------------------------|---------------|--------------------------|
+| >= 2.4s (no Serpent's Swiftness) | Short French (5:4:1:1) | SV base |
+| >= 1.95s | French (5:5:1:1) | BM base / SV with Hawk proc |
+| 1.65 - 1.95s | Long French (5:6:1:1) | Hawk proc |
+| 1.45 - 1.65s | 1:1 | Rapid Fire or Bloodlust |
+| 1.05 - 1.45s | Skipping (5:9:1:1) | RF + Hawk, RF + Bloodlust |
+| 0.85 - 1.05s | 2:3 | RF + Hawk + Bloodlust |
+| 0.70 - 0.85s | 1:2 | RF + Bloodlust + Haste Potion |
+| 0.62 - 0.70s | 2:5 | RF + (Hawk or DST) + Bloodlust + Pot |
+| < 0.62s | 1:3 | full stacking |
 
 ### Haste Buff Tracking
 Dynamically tracks all relevant haste effects and adjusts recommendations in real time:
@@ -44,14 +47,12 @@ Reads network latency (home/world) every 0.5 seconds (exponentially smoothed) an
 ### Gear and Talent Awareness
 - Scans equipped ranged weapon stats (damage, speed), ammo DPS, and quiver haste bonus.
 - Reads talent investments for crit modifiers, damage multipliers, cooldown reductions, and Serpent's Swiftness.
-- Automatically recalculates when gear or talents change.
-
-### Target Debuff Tracking
-Monitors debuffs on the current target that affect the player's damage output.
+- Automatically recalculates when gear, talents, or known spells change (event-driven, not per-frame).
+- Monitors ranged-AP-relevant debuffs on the current target (Hunter's Mark by rank, Expose Weakness), matched by spell ID so non-English clients work.
 
 ## Customization
 
-All settings are accessed via the `/fluffy` slash command:
+All settings are accessed via the `/fluffy` slash command. Numeric arguments are validated and clamped to sane ranges; invalid input prints the help text instead of being stored.
 
 | Command | Description |
 |---------|-------------|
@@ -61,7 +62,7 @@ All settings are accessed via the `/fluffy` slash command:
 | `/fluffy show` / `hide` | Toggle bar visibility |
 | `/fluffy lock` / `unlock` | Lock/unlock bar dragging (Shift+Click to drag) |
 | `/fluffy reset` | Reset all settings to defaults |
-| `/fluffy freq N` | Set UI refresh rate (N times per second) |
+| `/fluffy freq N` | Set label refresh rate (N times per second) |
 | `/fluffy showicons` | Toggle ability icons on bars |
 | `/fluffy icosize L` | Set icon size to L x L pixels |
 | `/fluffy color_auto R G B A` | Set Auto Shot bar color (also: `color_steady`, `color_multi`, `color_arcane`, `color_spark`, `color_raptor`, `color_melee`) |
@@ -69,38 +70,48 @@ All settings are accessed via the `/fluffy` slash command:
 | `/fluffy use_arcane` | Toggle Arcane Shot recommendations |
 | `/fluffy use_multi` | Toggle Multi-Shot recommendations |
 | `/fluffy use_melee` | Toggle melee ability recommendations |
+| `/fluffy rangeonly` | Move Multi-Shot and Arcane Shot to the secondary (lower) row |
 | `/fluffy incombat` | Toggle showing bars only during combat |
-| `/fluffy length N` | Set how many seconds into the future recommendations are shown |
+| `/fluffy length N` | Set how many seconds into the future recommendations are shown (1-10) |
 | `/fluffy latency` | Display current measured latency and compensation offset |
+| `/fluffy baked_rotation` | Toggle rotation-aware mode (shows only the next ability to cast) |
+| `/fluffy show_mode` | Toggle the rotation mode label above the bar |
+| `/fluffy baked_melee` | Include melee abilities in baked rotation recommendations |
+| `/fluffy debug` | Print measured vs modeled auto shot timings after every shot |
 | `/fluffy purgedb` | Clear cached gear/ammo data |
 
 ## Technical Details
 
-- **Version:** 2.3.0 (internal version code 221)
+- **Version:** 2.5.0 (internal version code 250)
 - **Author:** Fluffydork of Nethergarde Keep (EU)
 - **Interface:** 20504 (TBC Classic)
 - **Category:** Combat
 - **Curse Project ID:** 470317
 - **Saved Variables:** Per-character (`FluffyDBPC`)
 
+### Known Limitations
+
+- Weapon, ammo, and quiver stats are read from tooltip text; on non-English clients the parsing may fail (the addon then leaves the affected values at 0 and retries on the next inventory event rather than erroring).
+- Talent bonuses are looked up by English talent names; on non-English clients they default to untrained.
+
 ## File Structure
 
 | File | Purpose |
 |------|---------|
 | `FluffyHunterBars.toc` | Addon manifest (load order, metadata) |
-| `preamble.debug.lua` | Debug utilities |
-| `preamble.variables.lua` | Global variable declarations, spell IDs, haste buff tables, UI constants |
-| `preamble.auxiliary.lua` | Helper/utility functions |
-| `player.stats.lua` | Tracks player stats (agility, AP, hit, crit) over time |
-| `player.haste.lua` | Tracks haste buffs and computes effective haste |
-| `player.arp.lua` | Tracks armor penetration buffs |
-| `player.damage.lua` | Damage calculation logic |
-| `abilities.lua` | Ability definitions (cooldowns, cast times, damage formulas) |
+| `preamble.debug.lua` | Debug print helper (`/fluffy debug`) |
+| `preamble.variables.lua` | Namespace variable declarations, spell IDs, haste buff tables, UI constants |
+| `preamble.auxiliary.lua` | Helper/utility functions and saved-variable initialization |
+| `player.stats.lua` | Tracks player AP and target debuffs (Hunter's Mark, Expose Weakness) |
+| `abilities.lua` | Ability definitions (cooldowns, cast times, damage formulas) and combat-log event handling |
 | `recommendation_calculation.lua` | Core rotation optimizer — computes optimal ability windows |
 | `talent_handler.lua` | Reads talent tree and applies modifiers |
-| `ammo_handler.lua` | Tracks ammo type and DPS |
-| `equipment_handler.lua` | Tracks equipped weapons and quiver |
-| `target.debuffs.lua` | Monitors target debuffs |
-| `ui.elems.lua` | UI element creation (bars, sparks, icons) |
-| `ui.core.lua` | UI update loop, rendering, drag handling |
+| `ammo_handler.lua` | Tracks ammo type and DPS, quiver haste |
+| `equipment_handler.lua` | Tracks equipped weapons |
+| `ui.elems.lua` | UI element creation (bars, sparks, labels) |
+| `ui.layout.lua` | Size/position/visibility management |
+| `ui.render.lua` | Per-frame bar and spark rendering |
+| `ui.labels.lua` | Rotation mode / eWS / latency label updates |
+| `ui.core.lua` | UI update loop and drag handling |
 | `core.lua` | Addon initialization, slash command handler, event registration |
+| `tests/` | Offline Lua 5.1 harnesses for the timing model and rotation priorities |

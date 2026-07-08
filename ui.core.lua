@@ -142,20 +142,21 @@ local function gui_Update(self, elapsed)
     -- -----------------------------------------------------------------------
     -- LOGIC: recalculate ability windows every frame so render t == logic t,
     -- eliminating the sawtooth jitter that throttling caused.
+    -- (Spell/talent data refreshes are event-driven — SPELLS_CHANGED,
+    -- UNIT_SPELLCAST_SENT, UNIT_INVENTORY_CHANGED — not per-frame.)
     -- -----------------------------------------------------------------------
     fluffy.logic_dirty = false;
-    update_spell_data();
 
     fluffy.bar_len_seconds = FluffyDBPC["window_length"];
     fluffyBar_len_s = fluffy.bar_len_seconds;
-    analyze_game_state(fluffyBar_len_s, t);
+    fluffy.analyze_game_state(fluffyBar_len_s, t);
 
     -- -----------------------------------------------------------------------
     -- SPARK JUMP DETECTION: compare new spark positions against previous
     -- frame to detect haste-change or fire-event shifts, then fold the diff
     -- into spark_correction for a smooth glide rather than a hard snap.
     -- -----------------------------------------------------------------------
-    local n_sparks_now = table.getn(fluffy.autoshot_sparks);
+    local n_sparks_now = #fluffy.autoshot_sparks;
     if n_sparks_now >= 1 and fluffy.prev_spark_1 > 0 then
         local new_s1   = fluffy.autoshot_sparks[1];
         local half_ews = (fluffy.rotation_ews or 1) * 0.5;
@@ -210,21 +211,20 @@ end
 -- UI construction — called once from core.lua after ADDON_LOADED.
 -- Creates all bar/spark frames and wires up the input/update scripts.
 -- ---------------------------------------------------------------------------
-function create_ui()
+function fluffy.create_ui()
 
-    create_main_bar();
-    create_icon_anchor();
+    fluffy.create_main_bar();
     local nbars = 16;
 
-    create_autoshotTrackers(nbars);
+    fluffy.create_autoshotTrackers(nbars);
 
     local align = 'CENTER';
-    create_bars(fluffy.ability_autoshot,     align, nbars, FluffyDBPC["color_auto"][1],    FluffyDBPC["color_auto"][2],    FluffyDBPC["color_auto"][3],    FluffyDBPC["color_auto"][4],    fluffy.icon_path_auto);
-    create_bars(fluffy.ability_arcaneshot,   align, nbars, FluffyDBPC["color_arcane"][1],  FluffyDBPC["color_arcane"][2],  FluffyDBPC["color_arcane"][3],  FluffyDBPC["color_arcane"][4],  fluffy.icon_path_arcane);
-    create_bars(fluffy.ability_multishot,    align, nbars, FluffyDBPC["color_multi"][1],   FluffyDBPC["color_multi"][2],   FluffyDBPC["color_multi"][3],   FluffyDBPC["color_multi"][4],   fluffy.icon_path_multi);
-    create_bars(fluffy.ability_steadyshot,   align, nbars, FluffyDBPC["color_steady"][1],  FluffyDBPC["color_steady"][2],  FluffyDBPC["color_steady"][3],  FluffyDBPC["color_steady"][4],  fluffy.icon_path_steady);
-    create_bars(fluffy.ability_raptorstrike, align, nbars, FluffyDBPC["color_raptor"][1],  FluffyDBPC["color_raptor"][2],  FluffyDBPC["color_raptor"][3],  FluffyDBPC["color_raptor"][4],  fluffy.icon_path_raptor);
-    create_bars(fluffy.ability_meleestrike,  align, nbars, FluffyDBPC["color_melee"][1],   FluffyDBPC["color_melee"][2],   FluffyDBPC["color_melee"][3],   FluffyDBPC["color_melee"][4],   fluffy.icon_path_melee);
+    fluffy.create_bars(fluffy.ability_autoshot,     align, nbars, FluffyDBPC["color_auto"][1],    FluffyDBPC["color_auto"][2],    FluffyDBPC["color_auto"][3],    FluffyDBPC["color_auto"][4],    fluffy.icon_path_auto);
+    fluffy.create_bars(fluffy.ability_arcaneshot,   align, nbars, FluffyDBPC["color_arcane"][1],  FluffyDBPC["color_arcane"][2],  FluffyDBPC["color_arcane"][3],  FluffyDBPC["color_arcane"][4],  fluffy.icon_path_arcane);
+    fluffy.create_bars(fluffy.ability_multishot,    align, nbars, FluffyDBPC["color_multi"][1],   FluffyDBPC["color_multi"][2],   FluffyDBPC["color_multi"][3],   FluffyDBPC["color_multi"][4],   fluffy.icon_path_multi);
+    fluffy.create_bars(fluffy.ability_steadyshot,   align, nbars, FluffyDBPC["color_steady"][1],  FluffyDBPC["color_steady"][2],  FluffyDBPC["color_steady"][3],  FluffyDBPC["color_steady"][4],  fluffy.icon_path_steady);
+    fluffy.create_bars(fluffy.ability_raptorstrike, align, nbars, FluffyDBPC["color_raptor"][1],  FluffyDBPC["color_raptor"][2],  FluffyDBPC["color_raptor"][3],  FluffyDBPC["color_raptor"][4],  fluffy.icon_path_raptor);
+    fluffy.create_bars(fluffy.ability_meleestrike,  align, nbars, FluffyDBPC["color_melee"][1],   FluffyDBPC["color_melee"][2],   FluffyDBPC["color_melee"][3],   FluffyDBPC["color_melee"][4],   fluffy.icon_path_melee);
 
     FluffyBar:SetScript("OnMouseDown", gui_MouseDown);
     FluffyBar:SetScript("OnMouseUp",   gui_MouseUp);

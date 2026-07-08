@@ -21,7 +21,7 @@ local function scan_talents()
 	return ranks;
 end
 
-function update_talent_stats()
+function fluffy.update_talent_stats()
 	if fluffy.is_player_hunter == false then
 		return;
 	end
@@ -31,9 +31,7 @@ function update_talent_stats()
 	-- If the scan returned nothing, talent data is not yet available.
 	-- Bail out and let a later event (PLAYER_ENTERING_WORLD,
 	-- CHARACTER_POINTS_CHANGED) retry.
-	local has_data = false;
-	for _ in pairs(ranks) do has_data = true; break; end
-	if not has_data then return; end
+	if next(ranks) == nil then return; end
 
 	-- Helper: look up a talent rank by name, defaulting to 0 if not
 	-- found (talent not trained or locale mismatch).
