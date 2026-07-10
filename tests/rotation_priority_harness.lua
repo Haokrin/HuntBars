@@ -191,8 +191,10 @@ end
 -- Scenario A: eWS 3.0 (slowest band), fresh auto fire.
 -- Fire at 10.5 (aim 10.0..10.5), evaluated at t = 10.6.
 -- Expected first-gap tiling (aim start of next auto = 13.0):
---   steady [10.6 .. 11.42]   (13.0 - 1.5 cast - 0.08 RTT)
---   multi  [11.42 .. 12.42]  (13.0 - 0.5 cast - 0.08 RTT)
+--   steady [10.6 .. 11.82]   (13.0 - 1.5 cast - 0.08 RTT + 0.4 accepted
+--                             clip: min(0.4, half the per-gap GCD slack))
+--   multi  [11.82 .. 12.42]  (up to 13.0 - 0.5 cast - 0.08 RTT; casts
+--                             other than Steady never clip)
 --   arcane [12.42 .. 13.0]   (instant; up to the aim start — the GCD
 --                             reservation is non-binding here because the
 --                             per-gap slack 1.5 covers the spillover)
@@ -210,8 +212,8 @@ local sWe = fluffy.ability_steadyshot["windows_e"];
 local mWs, mWe = fluffy.ability_multishot["windows_s"], fluffy.ability_multishot["windows_e"];
 local aWs, aWe = fluffy.ability_arcaneshot["windows_s"], fluffy.ability_arcaneshot["windows_e"];
 
-check("A: steady deadline = aim - cast - RTT",        sWe[1], 11.42, 1e-6);
-check("A: multi opens at steady deadline",            mWs[1], 11.42, 1e-6);
+check("A: steady deadline = aim - cast - RTT + 0.4 clip", sWe[1], 11.82, 1e-6);
+check("A: multi opens at steady deadline",            mWs[1], 11.82, 1e-6);
 check("A: multi deadline = aim - cast - RTT",         mWe[1], 12.42, 1e-6);
 check("A: arcane opens at multi deadline",            aWs[1], 12.42, 1e-6);
 check("A: arcane extends to the aim start",           aWe[1], 13.0, 1e-6);
@@ -364,16 +366,29 @@ setup_cycle_state(2.17, 0.05, 7000);
 now = 7000;
 fluffy.analyze_game_state(3, now);
 
+local g_aim_start = fluffy.ability_autoshot["next_start"];
+local g_steady_cast = 1.5 * (2.17 / 3.0);
+local g_clip_allowance = math.min(0.4, 0.5 * (2.17 - GCD));
+
 local gWs, gWe = fluffy.ability_arcaneshot["windows_s"], fluffy.ability_arcaneshot["windows_e"];
 local gmWe = fluffy.ability_multishot["windows_e"];
+local gsWe = fluffy.ability_steadyshot["windows_e"];
 assert(#gWs >= 1, "expected an arcane window in the French gap");
 check("G: French arcane opens at the multi deadline",
       gWs[1], gmWe[1], 1e-6);
 check("G: French arcane extends to the aim start",
-      gWe[1], fluffy.ability_autoshot["next_start"], 1e-6);
--- the strict rule (no slack) would have emptied this window entirely
-local g_next_steady_deadline = fluffy.ability_steadyshot["windows_e"][2];
-assert(g_next_steady_deadline - GCD < gWs[1],
+      gWe[1], g_aim_start, 1e-6);
+-- Steady presses may run a bounded amount past the strict no-clip
+-- deadline: the reference French rotation clips autos by 0.12-0.36 s
+-- with Steady casts pressed at GCD boundaries.
+check("G: steady deadline = strict deadline + accepted clip",
+      gsWe[1], g_aim_start - g_steady_cast - RTT + g_clip_allowance, 1e-6);
+assert(g_clip_allowance > 0.1 and g_clip_allowance <= 0.4,
+       "clip allowance must stay within the reference autodelay range");
+-- the strict reservation (no slack, no clip) would have emptied the
+-- arcane window entirely at this speed
+local g_strict_next_deadline = g_aim_start + 2.17 - g_steady_cast - RTT;
+assert(g_strict_next_deadline - GCD < gWs[1],
        "strict reservation must be binding at this speed for the regression to be meaningful");
 check_priority_properties("G", now);
 
