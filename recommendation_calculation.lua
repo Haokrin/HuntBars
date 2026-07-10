@@ -65,17 +65,25 @@ local function optimize_towards_autoshot()
                 local f = auto_ts;
 
                 if A == fluffy.ability_steadyshot then
-                    -- Steady Shot: use DPS equilibrium as primary cap, but also apply
-                    -- a hard safety cap based on cast time and latency. The equilibrium
-                    -- point maximizes single-target DPS against autoshot; the hard cap
-                    -- guarantees the cast can still finish before the server-side aim
-                    -- start.  Full RTT is required (press -> server one-way, plus the
-                    -- displayed timeline being event-arrival anchored, i.e. another
-                    -- one-way late).  With only RTT/2 every press at the shown window
-                    -- end clips the auto shot by the missing half.
+                    -- Steady Shot: use DPS equilibrium as primary cap, plus a
+                    -- safety cap based on cast time and latency.  The safety
+                    -- cap guarantees the cast finishes before the server-side
+                    -- aim start (full RTT: press -> server one-way, plus the
+                    -- displayed timeline being event-arrival anchored, i.e.
+                    -- another one-way late) — EXTENDED by a bounded accepted
+                    -- clip at slow speeds.  The reference French rotation
+                    -- presses Steady at GCD boundaries even when the cast
+                    -- runs 0.12-0.36 s past the aim start (its diagrams draw
+                    -- exactly those "autodelay" boxes; 95% auto efficiency
+                    -- is the accepted price of 96% GCD efficiency).  The
+                    -- allowance is half the per-gap idle GCD time, capped at
+                    -- 0.4 s: zero at 1:1 speeds (strict no-clip, where a
+                    -- delayed Steady cascades through the saturated GCD
+                    -- chain), ~0.34 s at BM-base French (eWS 2.17).
                     local cast_time = A["cast"](auto_ts);
+                    local clip_allowance = min(0.4, 0.5 * max(0, (fluffy.rotation_ews or 0) - gcd_lockout));
                     f = min(f, get_point_of_equilibrium_autoshot(A, auto_ts, auto_te));
-                    f = min(f, auto_ts - cast_time - fluffy.latency_rtt);
+                    f = min(f, auto_ts - cast_time - fluffy.latency_rtt + clip_allowance);
                 else
                     -- Multi/Arcane also have a cast time. Pulling the window
                     -- end back by cast(t) ensures we never suggest firing them
