@@ -323,8 +323,13 @@ end
 local function insert_weave_safe_windows(A, ts, te)
     for k = 1, #fluffy.autoshot_sparks do
         local fire = fluffy.autoshot_sparks[k];
-        local blocked_from = fire - fluffy.ability_autoshot["cast"](fire)
-                             - fluffy.weave_time - fluffy.latency_rtt;
+        local aim;
+        if k == 1 and fluffy.scheduled_aim > 0.01 then
+            aim = fluffy.scheduled_aim;  -- in-flight shot keeps its schedule
+        else
+            aim = fluffy.ability_autoshot["cast"](fire);
+        end
+        local blocked_from = fire - aim - fluffy.weave_time - fluffy.latency_rtt;
         if blocked_from > te then
             break;  -- sparks ascend; later autos cannot clip this window
         end
@@ -348,7 +353,15 @@ local function analyze_windows_of_opportunities_experimental(abilities, window_l
 
     -- first we define curently expected windows for autoshot casts
     for k, auto_fired_time in pairs(fluffy.autoshot_sparks) do
-        local auto_cast = fluffy.ability_autoshot["cast"](auto_fired_time);
+        -- The in-flight shot (first spark) keeps the aim duration it was
+        -- scheduled with; haste applies from the next shot onward, so only
+        -- the later shots use the current attack speed.
+        local auto_cast;
+        if k == 1 and fluffy.scheduled_aim > 0.01 then
+            auto_cast = fluffy.scheduled_aim;
+        else
+            auto_cast = fluffy.ability_autoshot["cast"](auto_fired_time);
+        end
         table.insert(intervals_autoshot_ends, auto_fired_time);
         table.insert(intervals_autoshot_starts, auto_fired_time - auto_cast);
 
@@ -552,36 +565,16 @@ function fluffy.analyze_game_state(window_len, t)
             new_ews = fluffy.ability_autoshot["cdb"](t) + fluffy.ability_autoshot["cast"](t);
         end
 
-        -- MID-CYCLE HASTE RESCALE.  When ranged attack speed changes between
-        -- frames (Quick Shots / Rapid Fire / trinket proc gained or expired),
-        -- the game engine rescales the REMAINING swing time proportionally:
-        --   remaining_new = remaining_old * new_speed / old_speed.
-        -- Mirror exactly that, anchored at now.  An earlier implementation
-        -- re-anchored the FULL period from the last fire (fired + new_speed),
-        -- which over-corrects by applying the new speed to the already
-        -- elapsed portion too — those oversized jumps are why rescaling was
-        -- once removed.  Scaling only the remaining time is small (e.g. a
-        -- 15% Quick Shots expiry 80% through the cycle moves the spark by
-        -- ~0.07 s, not ~0.35 s) and spark_correction glides it smoothly.
-        -- Without this, the prediction goes stale whenever a haste buff
-        -- drops mid-cycle: the bar reaches the predicted fire point early,
-        -- the overdue-freeze engages, and the bar visibly stalls right
-        -- before the auto fires — looking exactly like a clipped shot.
-        local prev_ews = fluffy.swing_speed_snapshot;
-        if prev_ews > 0.1 and new_ews > 0.1
-                and math.abs(new_ews - prev_ews) > 0.005
-                and not fluffy.is_casting_autoshot
-                and fluffy.ability_autoshot["next_fired"] > t then
-            local ratio = new_ews / prev_ews;
-            local ns = fluffy.ability_autoshot["next_start"];
-            if ns > t then
-                fluffy.ability_autoshot["next_start"] = t + (ns - t) * ratio;
-            end
-            fluffy.ability_autoshot["next_fired"] =
-                t + (fluffy.ability_autoshot["next_fired"] - t) * ratio;
-        end
-        fluffy.swing_speed_snapshot = new_ews;
-
+        -- NO mid-swing rescale: a haste change between shots does NOT
+        -- affect the auto shot already in flight — the server applies the
+        -- new attack speed from the NEXT shot onward.  next_start /
+        -- next_fired keep the schedule they were given at the last fire;
+        -- the SPELL_CAST_SUCCESS handler reads the then-current speed and
+        -- re-anchors the following cycle.  Rescaling the remaining swing
+        -- here made the prediction disagree with the actual fire whenever
+        -- a proc came up or fell off mid-swing, desyncing the whole bar
+        -- until the next shot.  Only the eWS label, the rotation mode, and
+        -- the gaps AFTER the in-flight shot react to the new speed.
         fluffy.rotation_ews  = new_ews;
         fluffy.rotation_mode = fluffy.derive_rotation_mode(new_ews);
     end
@@ -636,8 +629,18 @@ function fluffy.analyze_game_state(window_len, t)
         api_ews = api_cast_time + fluffy.ability_autoshot["cdb"](t);
     end
 
+    -- Aim duration of the shot in flight, as scheduled at its fire time
+    -- (next_fired - next_start).  Because haste applies from the next shot
+    -- onward, the FIRST spark and the first gap's aim window must use this
+    -- stored value; only the shots after it use the current attack speed.
+    local scheduled_aim = fluffy.ability_autoshot["next_fired"] - fluffy.ability_autoshot["next_start"];
+    if not (scheduled_aim > 0.01 and scheduled_aim <= 1.0) then
+        scheduled_aim = api_cast_time;
+    end
+    fluffy.scheduled_aim = scheduled_aim;
+
     local autoshot_shift = fluffy.ability_autoshot["next_start"];
-    if autoshot_shift < t - 1.2 * api_cast_time then
+    if autoshot_shift < t - 1.2 * scheduled_aim then
         autoshot_shift = t;
     end
     -- Only apply cast_finishes constraint for NON-autoshot casts (e.g. Steady,
@@ -651,7 +654,7 @@ function fluffy.analyze_game_state(window_len, t)
     else
         autoshot_shift = max(autoshot_shift, fluffy.autoshot_delay);
     end
-    autoshot_shift = autoshot_shift + api_cast_time;
+    autoshot_shift = autoshot_shift + scheduled_aim;
     table.insert(fluffy.autoshot_sparks, autoshot_shift);
 
     while autoshot_shift < t + 3*window_len do

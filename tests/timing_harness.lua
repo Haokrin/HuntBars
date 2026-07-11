@@ -13,9 +13,10 @@
 --   2. The Steady Shot safe-press deadline: pressing at the displayed window
 --      end must finish the cast server-side no later than the server-side
 --      aim start, accounting for both one-way latency legs (full RTT).
---   3. Mid-cycle haste rescaling: when ranged speed changes between frames,
---      only the REMAINING swing time is rescaled (matching the game engine),
---      and the rescale is idempotent across frames.
+--   3. Mid-swing haste changes apply from the NEXT shot only: the shot in
+--      flight keeps the schedule it was given at its fire (next_start /
+--      next_fired and the first spark must not move), while the gaps after
+--      it use the new attack speed.
 --   4. Cast pushback: a cast in progress that ends after the predicted aim
 --      start pushes next_start to the cast end exactly once.
 --   5. The overdue-freeze grace keeps an absolute floor at high haste.
@@ -178,24 +179,34 @@ assert(old_clip > 0.2, "expected the old model to clip at this haste");
 check("steady window 2 opens at previous auto fire",
       ws[2], fluffy.ability_autoshot["next_fired"], 1e-6);
 
--- (3) mid-cycle haste rescale (Quick Shots expires: speed 1.5 -> 1.725) -----
+-- (3) mid-swing haste change: applies from the NEXT shot only ---------------
+-- The shot already in flight keeps the schedule it was given when it
+-- fired; the new attack speed shows up from the following cycle onward.
+-- The bar must NOT move the first spark when a proc comes up or falls
+-- off mid-swing — rescaling it desyncs the bar from the actual fire.
 now = 10.5;
-api_ranged_speed = 1.5 * 1.15;
+api_ranged_speed = 1.5 * 1.15;                         -- Quick Shots fell off
 haste_rating_ranged = 1577 / 1.15 / (2.0 / 1.15 - 1);  -- keep table mod consistent
 fluffy.analyze_game_state(3, now);
 
-check("rescale: next_fired remaining scaled by new/old speed",
-      fluffy.ability_autoshot["next_fired"], 10.5 + (11.75 - 10.5) * 1.15, 1e-6);
-check("rescale: next_start remaining scaled by new/old speed",
-      fluffy.ability_autoshot["next_start"], 10.5 + (11.5 - 10.5) * 1.15, 1e-6);
+check("haste change: next_start untouched mid-swing",
+      fluffy.ability_autoshot["next_start"], 11.5, 1e-9);
+check("haste change: next_fired untouched mid-swing",
+      fluffy.ability_autoshot["next_fired"], 11.75, 1e-9);
+check("haste change: first spark keeps its scheduled fire time",
+      fluffy.autoshot_sparks[1], 11.75, 1e-6);
+check("haste change: following gap uses the new speed",
+      fluffy.autoshot_sparks[2] - fluffy.autoshot_sparks[1], 1.725, 1e-6);
+check("haste change: first aim window uses the scheduled aim",
+      fluffy.scheduled_aim, 0.25, 1e-9);
 
 local nf_before, ns_before =
     fluffy.ability_autoshot["next_fired"], fluffy.ability_autoshot["next_start"];
 now = 10.6;
 fluffy.analyze_game_state(3, now);
-check("rescale idempotent: next_fired unchanged on stable speed",
+check("haste change: next_fired still untouched on a later frame",
       fluffy.ability_autoshot["next_fired"], nf_before, 1e-9);
-check("rescale idempotent: next_start unchanged on stable speed",
+check("haste change: next_start still untouched on a later frame",
       fluffy.ability_autoshot["next_start"], ns_before, 1e-9);
 
 -- (4) cast pushback into the prediction -------------------------------------

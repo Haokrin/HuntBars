@@ -100,8 +100,13 @@ local function gui_Update(self, elapsed)
     local next_start_check = fluffy.ability_autoshot["next_start"];
     local autoshot_overdue = false;
     if next_start_check > 0 and not fluffy.is_casting_autoshot then
+        -- Prefer the aim the in-flight shot was actually scheduled with;
+        -- the current attack speed may already differ (haste applies from
+        -- the next shot onward).
         local est_cast = 0.5;
-        if fluffy.rotation_ews > 0.1 and fluffy.ranged_base_speed > 0 then
+        if fluffy.scheduled_aim and fluffy.scheduled_aim > 0.01 then
+            est_cast = fluffy.scheduled_aim;
+        elseif fluffy.rotation_ews > 0.1 and fluffy.ranged_base_speed > 0 then
             est_cast = fluffy.rotation_ews * 0.5 / fluffy.ranged_base_speed;
         end
         -- Grace period after the predicted fire before declaring the shot
