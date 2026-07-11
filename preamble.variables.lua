@@ -169,13 +169,13 @@ fluffy.debug_output = false;
 -- the visual jump when transitioning from one auto shot cycle to the next.
 fluffy.spark_correction = 0;
 
--- Effective weapon speed (UnitRangedDamage) that the current
--- next_start/next_fired prediction was computed with.  When the live speed
--- deviates from this snapshot mid-cycle (haste proc gained or expired), the
--- game engine rescales the REMAINING swing time proportionally — and
--- analyze_game_state mirrors that so the prediction stays accurate instead
--- of going stale until the next fire event.
-fluffy.swing_speed_snapshot = 0;
+-- Aim (cast) duration the in-flight auto shot was scheduled with, derived
+-- as next_fired - next_start each frame.  Haste changes mid-swing do NOT
+-- affect the shot already in flight — the server applies the new speed
+-- from the next shot onward — so the first spark, the first gap's aim
+-- window, and the weave clipping all use this stored value instead of the
+-- current attack speed.
+fluffy.scheduled_aim = 0;
 
 -- Tracks the last time an event caused a state change, so the OOC idle
 -- freeze can continue updating long enough for cooldowns to expire.

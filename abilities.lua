@@ -519,7 +519,6 @@ local function update_spell_finished(spellID)
 		fluffy.ability_autoshot["fired"] = t;
 		fluffy.ability_autoshot["next_start"] = t + speed - fluffy.ability_autoshot["cast"](t);
 		fluffy.ability_autoshot["next_fired"] = t + speed;
-		fluffy.swing_speed_snapshot = speed;
 
 	elseif isSpellAnAbility(spellID, fluffy.ability_multishot) then
 		fluffy.ability_multishot["fired"] = t;
@@ -634,7 +633,6 @@ local function parse_combat_event(log_message)
 				fluffy.ability_autoshot["next_start"] = current_auto_start;
 				fluffy.ability_autoshot["next_fired"] = current_auto_start + init_cast;
 				fluffy.rotation_ews = init_speed;
-				fluffy.swing_speed_snapshot = init_speed;
 			end
 		elseif event == "SPELL_CAST_START" then
 			
@@ -678,14 +676,12 @@ local function parse_combat_event(log_message)
 			fluffy.ability_autoshot["next_fired"] = next_auto_finish;
 			fluffy.logic_dirty = true;
 
-			-- Update rotation_ews AND swing_speed_snapshot to the same
-			-- authoritative API speed the next_start/next_fired prediction
-			-- was just computed with.  The mid-cycle haste rescale in
-			-- analyze_game_state compares the live speed against this
-			-- snapshot, so setting it here guarantees the freshly rebased
-			-- cycle is not immediately rescaled a second time.
+			-- The fire is THE moment haste takes effect: the next cycle is
+			-- scheduled here with the speed current at this shot.  A haste
+			-- change later in the swing will not touch this schedule (the
+			-- server applies it from the next shot onward); analyze reads
+			-- the scheduled aim back via next_fired - next_start.
 			fluffy.rotation_ews = curr_speed;
-			fluffy.swing_speed_snapshot = curr_speed;
 
 			-- /fluffy debug: ground-truth check of the timing model.
 			--   aim      = SPELL_CAST_START -> SPELL_CAST_SUCCESS, vs modeled

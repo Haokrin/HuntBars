@@ -135,7 +135,6 @@ local function setup_cycle_state(ews, frac, t)
     fluffy.ability_autoshot["fired"] = fired;
     fluffy.ability_autoshot["next_fired"] = fired + ews;
     fluffy.ability_autoshot["next_start"] = fired + ews - aim;
-    fluffy.swing_speed_snapshot = ews;
     fluffy.rotation_ews = ews;
     fluffy.is_casting_autoshot = false;
     fluffy.cast_finishes = 0;

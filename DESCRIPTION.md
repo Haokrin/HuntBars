@@ -41,6 +41,8 @@ Dynamically tracks all relevant haste effects and adjusts recommendations in rea
 - Haste Potion, Dragonspine Trophy, Abacus of Violent Odds, Drums of Battle
 - And more (Crowd Pummeler, Jackhammer, Hammer Haste)
 
+Haste changes mid-swing follow the game's actual behaviour: the auto shot already in flight keeps the schedule it was given when it fired, and the new attack speed applies from the **next** shot onward. The first spark and its windows therefore stay put when a proc comes up or falls off; only the gaps after it (and the eWS label) react immediately.
+
 ### Latency Compensation
 Reads network latency (home/world) every 0.5 seconds (exponentially smoothed) and applies two compensation values: a one-way (RTT/2) offset for window starts, and a full-RTT margin on the safe-press deadline before each incoming auto shot (the press must reach the server AND the displayed timeline is event-arrival anchored, so both halves of the round trip apply). This prevents auto shot clipping on higher-ping connections. One-way is clamped to 25–250ms, RTT to 50–400ms.
 
