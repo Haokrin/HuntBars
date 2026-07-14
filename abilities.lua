@@ -581,6 +581,11 @@ local current_auto_start = 0;
 local current_auto_finish = 0;
 local next_auto_start = 0;
 local next_auto_finish = 0;
+-- Previous auto fire as seen by THIS combat-log handler.  The /fluffy debug
+-- cycle printout cannot use ability_autoshot["fired"]: the
+-- UNIT_SPELLCAST_SUCCEEDED handler arrives first and overwrites it with
+-- "now", which made the printed cycle always read 0.000.
+local last_debug_auto_fire = 0;
 local function parse_combat_event(log_message)
 
 	local t = GetTime();
@@ -648,7 +653,8 @@ local function parse_combat_event(log_message)
 			-- MEASURED aim duration and this fire's prediction error before
 			-- the cycle variables are overwritten below.
 			local measured_aim = current_auto_finish - current_auto_start;
-			local prev_fired = fluffy.ability_autoshot["fired"];
+			local prev_fired = last_debug_auto_fire;
+			last_debug_auto_fire = current_auto_finish;
 			local predicted_fire = fluffy.ability_autoshot["next_fired"];
 
 			-- Use UnitRangedDamage() as the authoritative speed source.
