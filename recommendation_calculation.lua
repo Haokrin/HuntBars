@@ -259,10 +259,22 @@ local function optimize_intervals_simple()
     -- is worth far less than the extra Arcane/Multi hit.  Without this
     -- allowance the Arcane window is empty at every eWS below ~2.25 s —
     -- i.e. for the whole BM French band — even though the 5:5:1:1 cycle
-    -- includes an Arcane.  At 1:1 speeds the slack is zero and the strict
-    -- rule remains: every Arcane press there would cost a Steady Shot, so
-    -- the correct recommendation IS an empty window.
-    local gcd_slack = max(0, (fluffy.rotation_ews or 0) - gcd_lockout);
+    -- includes an Arcane.  At 1:1 speeds (eWS ~1.5) the slack is zero and
+    -- the strict rule holds: every Arcane press there would cost a Steady.
+    --
+    -- The reservation only applies AT ALL while gaps are at least one GCD
+    -- long (eWS >= 1.5).  Below that the GCD chain is saturated and drifts
+    -- later every gap (eWS 1.31: ~0.19 s per gap): a cast is pressed every
+    -- 1.5 s no matter what, Steady cannot fill every gap by construction,
+    -- and the per-slot choice is simply the strongest ability whose cast
+    -- still fits before the incoming aim — the skipping rotation ("you can
+    -- Multi-Shot just before this catchup auto ... 7 casts for every 9 auto
+    -- shots").  Reserving future Steady deadlines in that regime demanded
+    -- the impossible (press + 1.5 s GCD inside a < 1.5 s gap), deleting
+    -- every Multi/Arcane window and leaving drifted gaps empty.
+    local ews_now = fluffy.rotation_ews or 0;
+    local gcd_slack = max(0, ews_now - gcd_lockout);
+    local reservation_applies = (ews_now <= 0.05) or (ews_now >= gcd_lockout);
     for i_tmp=1,#ability_priority_indices do
         local i = ability_priority_indices[i_tmp];
 
@@ -293,7 +305,7 @@ local function optimize_intervals_simple()
                         local ts_B = ints_B_s[l];
                         local te_B = ints_B_e[l];
 
-                        if (ts_B < te_B) and (ts_B >= te_A_in) then
+                        if reservation_applies and (ts_B < te_B) and (ts_B >= te_A_in) then
                             te_A = min(te_A, te_B - gcd_lockout + gcd_slack);
                         end
                     end

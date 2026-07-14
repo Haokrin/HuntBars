@@ -151,6 +151,11 @@ local function check_priority_properties(label, t)
     -- borrowed (the French band's "slightly delays the auto shots");
     -- zero at 1:1 speeds where the strict rule must hold.
     local slack = math.max(0, fluffy.rotation_ews - GCD);
+    -- Below the GCD the chain is saturated: a cast goes out every 1.5 s
+    -- regardless, Steady cannot fill every gap, and Multi/Arcane fill the
+    -- drifted gaps (skipping rotation) — the GCD-safety property against
+    -- future Steady deadlines does not apply in that regime.
+    local gcd_saturated = fluffy.rotation_ews > 0.05 and fluffy.rotation_ews < GCD;
 
     for _, low in ipairs({fluffy.ability_multishot, fluffy.ability_arcaneshot}) do
         local lWs, lWe = low["windows_s"], low["windows_e"];
@@ -168,7 +173,7 @@ local function check_priority_properties(label, t)
             -- (2) GCD safety at the worst press time (window end): the GCD
             -- may push the next steady past its deadline by at most slack
             local x = math.min(lWe[i], horizon);
-            if x >= lWs[i] then
+            if x >= lWs[i] and not gcd_saturated then
                 for j = 1, #sWs do
                     if sWe[j] > x then
                         if x + GCD > sWe[j] + slack + 1e-6 then
@@ -390,6 +395,40 @@ local g_strict_next_deadline = g_aim_start + 2.17 - g_steady_cast - RTT;
 assert(g_strict_next_deadline - GCD < gWs[1],
        "strict reservation must be binding at this speed for the regression to be meaningful");
 check_priority_properties("G", now);
+
+-- =====================================================================
+-- Scenario H: skipping band (eWS 1.31, e.g. Quick Shots + Rapid Fire).
+-- Below the 1.5 s GCD the chain is saturated and drifts later every gap
+-- (~0.19 s at this speed): Steady cannot fill every gap by construction,
+-- and the rotation presses Multi/Arcane where the Steady no longer fits
+-- ("you can Multi-Shot just before this catchup auto ... 7 casts for
+-- every 9 auto shots").  Every gap must therefore tile fully —
+--   steady -> multi -> arcane -> aim start —
+-- with the strict no-clip Steady deadline (no French clip allowance),
+-- so the bar always shows what fits at the player's next GCD.
+-- =====================================================================
+setup_cycle_state(1.31, 0.05, 8000);
+now = 8000;
+fluffy.analyze_game_state(3, now);
+
+local h_aim_start = fluffy.ability_autoshot["next_start"];
+local h_m = 1.31 / 3.0;
+local hsWe = fluffy.ability_steadyshot["windows_e"];
+local hmWs, hmWe = fluffy.ability_multishot["windows_s"], fluffy.ability_multishot["windows_e"];
+local haWs, haWe = fluffy.ability_arcaneshot["windows_s"], fluffy.ability_arcaneshot["windows_e"];
+assert(#hmWs >= 1 and #haWs >= 1, "expected multi and arcane windows in the skipping gap");
+
+check("H: steady deadline strict (no clip in skipping band)",
+      hsWe[1], h_aim_start - 1.5 * h_m - RTT, 1e-6);
+check("H: multi opens at the steady deadline",
+      hmWs[1], hsWe[1], 1e-6);
+check("H: multi deadline = aim start - cast - RTT",
+      hmWe[1], h_aim_start - 0.5 * h_m - RTT, 1e-6);
+check("H: arcane opens at the multi deadline",
+      haWs[1], hmWe[1], 1e-6);
+check("H: arcane extends to the aim start",
+      haWe[1], h_aim_start, 1e-6);
+check_priority_properties("H", now);
 
 -- ---------------------------------------------------------------------------
 print("");
