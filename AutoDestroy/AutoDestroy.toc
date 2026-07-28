@@ -1,0 +1,13 @@
+## Interface: 11507
+## Title: |cAA27AE60Auto Destroy|r
+
+## Notes: Destroys items you marked as junk as soon as they land in your bags
+
+## Author: Fluffydork of Nethergarde Keep (EU)
+## Version: 1.0.0
+
+## X-Category: Inventory
+
+## SavedVariables: AutoDestroyDB
+
+AutoDestroy.lua

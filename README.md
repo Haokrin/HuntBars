@@ -64,10 +64,15 @@ Offline test harnesses (plain Lua 5.1, no WoW client needed) verify the timing m
 ```
 lua5.1 tests/timing_harness.lua
 lua5.1 tests/rotation_priority_harness.lua
+lua5.1 tests/auto_destroy_harness.lua
 luacheck .
 ```
 
 The same checks run in CI on every push and pull request.
+
+## Also in this repository
+
+[`AutoDestroy/`](AutoDestroy/) is a separate, standalone addon for Classic Anniversary that destroys items you have marked as junk as soon as they land in your bags. It is not loaded by Fluffy Hunter Bars and is installed on its own — see [AutoDestroy/README.md](AutoDestroy/README.md).
 
 ## Details
 

@@ -22,5 +22,8 @@ jobs:
       - name: Rotation priority harness
         run: lua5.1 tests/rotation_priority_harness.lua
 
+      - name: Auto Destroy harness
+        run: lua5.1 tests/auto_destroy_harness.lua
+
       - name: Luacheck
         run: luacheck . --no-color -q

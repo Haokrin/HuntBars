@@ -40,6 +40,23 @@ read_globals = {
     "QuiverTooltipTextLeft7", "QuiverTooltipTextLeft8",
 }
 
+-- The Auto Destroy addon in AutoDestroy/ is a standalone addon with its own
+-- TOC, so it owns its own saved variables, slash commands and bag/cursor API.
+files["AutoDestroy/"] = {
+    globals = {
+        "AutoDestroyDB",
+        "SLASH_AUTODESTROY1",
+        "SLASH_AUTODESTROY2",
+    },
+    read_globals = {
+        "C_Container", "C_Timer",
+        "GetContainerNumSlots", "GetContainerItemInfo", "PickupContainerItem",
+        "GetCursorInfo", "ClearCursor", "DeleteCursorItem",
+        "InCombatLockdown", "SetOverrideBindingClick", "ClearOverrideBindings",
+        "NUM_BAG_SLOTS",
+    },
+}
+
 files["tests/"] = {
     -- The harnesses stub the WoW API as globals and poke addon state;
     -- silence global-definition warnings there.
